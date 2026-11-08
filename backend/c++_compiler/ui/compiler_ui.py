@@ -1,4 +1,4 @@
-"""Simple Tkinter front-end for the C++ mini compiler.
+"""Simple Tkinter front-end for the Tricora Compiler - C++ version.
 
 Type or open a program, press "Compile & Run", and see every compiler phase in its own tab.
 It only calls build/compiler.exe with different flags, so build the compiler first (make).
@@ -43,7 +43,7 @@ int main() {
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("C++ Mini Compiler")
+        self.title("Tricora Compiler - C++ version")
         self.geometry("1100x650")
 
         bar = ttk.Frame(self)

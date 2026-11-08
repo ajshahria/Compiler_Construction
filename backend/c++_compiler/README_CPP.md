@@ -1,4 +1,4 @@
-# C++ Mini Compiler
+# Tricora Compiler - C++ version
 
 Compiler for a C++-style mini language, built with **Flex** and **Bison** and written in **C++**.
 Part of the Compiler Construction Lab project (Metropolitan University, Bangladesh).

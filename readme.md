@@ -113,7 +113,7 @@ This repository is planned as a simple but functional compiler construction proj
 
 ---
 
-# C++ Compiler (branch `c++_compiler`)
+# Tricora Compiler - C++ version (branch `c++_compiler`)
 
 A Flex/Bison compiler written in C++ for the fixed mini language of the lab manual
 (`int`/`float`/`bool`, `if`/`else`, `while`, `print`, nested scopes) plus C++-style extras.

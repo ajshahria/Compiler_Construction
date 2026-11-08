@@ -172,7 +172,7 @@ def main():
     print("wrote", out_path)
 
 
-TEMPLATE = """<!doctype html><html><head><meta charset="utf-8"><title>C++ Mini Compiler Demo</title>
+TEMPLATE = """<!doctype html><html><head><meta charset="utf-8"><title>Tricora Compiler - C++ version Demo</title>
 <style>
 :root{--bg:#f6f7f9;--card:#fff;--ink:#1c2330;--mut:#667085;--line:#e3e6eb;--acc:#2f6feb;--ok:#18794e;--bad:#c0352b;--code:#0f172a}
 @media (prefers-color-scheme:dark){:root{--bg:#0f1319;--card:#171d26;--ink:#e6e9ef;--mut:#98a2b3;--line:#2a3340;--acc:#6ea0ff;--ok:#4cc38a;--bad:#ff7b72;--code:#0b0f14}}
@@ -192,7 +192,7 @@ pre{margin:0;padding:12px 14px;font:12.5px/1.5 Consolas,monospace;background:var
 .tab.on{color:var(--acc);box-shadow:inset 0 -2px var(--acc)}
 .lbl{padding:6px 14px;color:var(--mut);font-size:12px;border-bottom:1px solid var(--line)}
 </style></head><body>
-<header><h1>C++ Mini Compiler - live results</h1>
+<header><h1>Tricora Compiler - C++ version - live results</h1>
 <p>Each program was run through the real compiler. Pick a tab to see that phase.</p></header>
 <main id="m"></main>
 <script>
