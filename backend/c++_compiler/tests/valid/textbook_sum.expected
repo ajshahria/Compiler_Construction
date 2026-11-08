@@ -1,0 +1,27 @@
+=== Headers ===
+Header              Line  Category      Role in this compiler
+------------------------------------------------------------------------
+<iostream>          2     I/O           enables cout / endl  - std::cout / std::cin streams
+=== Three Address Code ===
+    outs "Enter the first number: "
+    read num1
+    outs "Enter the second number: "
+    read num2
+    t1 = num1 + num2
+    sum = t1
+    outs "The sum is: "
+    out sum
+    outs "\n"
+    goto L1
+L1:
+=== Optimized TAC ===
+    outs "Enter the first number: "
+    read num1
+    outs "Enter the second number: "
+    read num2
+    sum = num1 + num2
+    outs "The sum is: "
+    out sum
+    outs "\n"
+=== Program Output ===
+Enter the first number: Enter the second number: The sum is: 7
