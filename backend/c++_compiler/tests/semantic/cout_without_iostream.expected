@@ -1,0 +1,6 @@
+=== Headers ===
+Header              Line  Category      Role in this compiler
+------------------------------------------------------------------------
+<vector>            3     Containers    accepted (no effect)  - dynamic array
+Semantic error [line 5]: 'cout' is not declared: add #include <iostream>
+Compilation failed: 1 semantic error(s).

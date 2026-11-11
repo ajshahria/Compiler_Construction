@@ -1,0 +1,2 @@
+Lexical error [line 3]: invalid identifier '2abc' (cannot start with a digit)
+Compilation failed: 1 lexical and 0 syntax error(s).

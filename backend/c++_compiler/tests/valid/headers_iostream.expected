@@ -1,0 +1,44 @@
+=== Headers ===
+Header              Line  Category      Role in this compiler
+------------------------------------------------------------------------
+<iostream>          3     I/O           enables cout / endl  - std::cout / std::cin streams
+<vector>            4     Containers    accepted (no effect)  - dynamic array
+<cmath>             5     Math          accepted (no effect)  - sqrt, pow, sin, ...
+<cstdlib>           6     C library     accepted (no effect)  - rand, malloc, exit, ...
+=== Three Address Code ===
+    total = 0
+    i = 1
+L1:
+    t1 = i <= 4
+    ifFalse t1 goto L2
+    t2 = i * i
+    t3 = total + t2
+    total = t3
+    t4 = i + 1
+    i = t4
+    goto L1
+L2:
+    out total
+    outnl
+    t5 = total + 1
+    out t5
+    outnl
+=== Optimized TAC ===
+    total = 0
+    i = 1
+L1:
+    t1 = i <= 4
+    ifFalse t1 goto L2
+    t2 = i * i
+    total = total + t2
+    i = i + 1
+    goto L1
+L2:
+    out total
+    outnl
+    t5 = total + 1
+    out t5
+    outnl
+=== Program Output ===
+30
+31

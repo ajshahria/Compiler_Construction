@@ -1,0 +1,2 @@
+Lexical error [line 1]: missing required header: add '#include <iostream>' at the top of the file
+Compilation failed: 1 lexical and 0 syntax error(s).

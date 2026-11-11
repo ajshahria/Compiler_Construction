@@ -1,0 +1,6 @@
+=== Headers ===
+Header              Line  Category      Role in this compiler
+------------------------------------------------------------------------
+<iostream>          2     I/O           enables cout / endl  - std::cout / std::cin streams
+Semantic error [line 8]: scope violation: 'inner' was declared in an inner block (line 5) and is not visible here
+Compilation failed: 1 semantic error(s).

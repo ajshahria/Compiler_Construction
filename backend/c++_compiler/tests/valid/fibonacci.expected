@@ -1,0 +1,46 @@
+=== Headers ===
+Header              Line  Category      Role in this compiler
+------------------------------------------------------------------------
+<iostream>          1     I/O           enables cout / endl  - std::cout / std::cin streams
+=== Three Address Code ===
+    n = 20
+    a = 0
+    b = 1
+    outs "Fibonacci: "
+    i = 0
+L1:
+    t1 = i < n
+    ifFalse t1 goto L2
+    out a
+    outs " "
+    t2 = a + b
+    t = t2
+    a = b
+    b = t
+    t3 = i + 1
+    i = t3
+    goto L1
+L2:
+    outnl
+    goto L4
+L4:
+=== Optimized TAC ===
+    n = 20
+    a = 0
+    b = 1
+    outs "Fibonacci: "
+    i = 0
+L1:
+    t1 = i < n
+    ifFalse t1 goto L2
+    out a
+    outs " "
+    t = a + b
+    a = b
+    b = t
+    i = i + 1
+    goto L1
+L2:
+    outnl
+=== Program Output ===
+Fibonacci: 0 1 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181 

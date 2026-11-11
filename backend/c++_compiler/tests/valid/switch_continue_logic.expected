@@ -1,0 +1,102 @@
+=== Headers ===
+Header              Line  Category      Role in this compiler
+------------------------------------------------------------------------
+<iostream>          1     I/O           enables cout / endl  - std::cout / std::cin streams
+=== Three Address Code ===
+    a = 5
+    b = 12
+    c = 13
+    t1 = a * a
+    t2 = b * b
+    t3 = t1 + t2
+    t4 = c * c
+    t5 = t3 == t4
+    right = t5
+    t6 = a == b
+    t7 = b == c
+    t8 = t6 && t7
+    equilateral = t8
+    outs "right: "
+    out right
+    outs " equilateral: "
+    out equilateral
+    outnl
+    total = 0
+    i = 1
+L1:
+    t9 = i <= 20
+    ifFalse t9 goto L2
+    t10 = i % 4
+    t11 = t10 != 0
+    ifFalse t11 goto L5
+    t12 = t10 != 1
+    ifFalse t12 goto L6
+    goto L7
+L5:
+    goto L3
+L6:
+    t13 = total + i
+    total = t13
+    goto L4
+L7:
+    t14 = total - 1
+    total = t14
+L4:
+    t15 = total > 30
+    ifFalse t15 goto L8
+    goto L2
+L8:
+L3:
+    t16 = i + 1
+    i = t16
+    goto L1
+L2:
+    outs "total = "
+    out total
+    outnl
+    goto L9
+L9:
+=== Optimized TAC ===
+    a = 5
+    b = 12
+    c = 13
+    right = true
+    equilateral = false
+    outs "right: "
+    out true
+    outs " equilateral: "
+    out false
+    outnl
+    total = 0
+    i = 1
+L1:
+    t9 = i <= 20
+    ifFalse t9 goto L2
+    t10 = i % 4
+    t11 = t10 != 0
+    ifFalse t11 goto L5
+    t12 = t10 != 1
+    ifFalse t12 goto L6
+    goto L7
+L5:
+    goto L3
+L6:
+    total = total + i
+    goto L4
+L7:
+    total = total - 1
+L4:
+    t15 = total > 30
+    ifFalse t15 goto L8
+    goto L2
+L8:
+L3:
+    i = i + 1
+    goto L1
+L2:
+    outs "total = "
+    out total
+    outnl
+=== Program Output ===
+right: 1 equilateral: 0
+total = 37

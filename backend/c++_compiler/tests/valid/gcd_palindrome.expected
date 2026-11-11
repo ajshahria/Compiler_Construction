@@ -1,0 +1,84 @@
+=== Headers ===
+Header              Line  Category      Role in this compiler
+------------------------------------------------------------------------
+<iostream>          1     I/O           enables cout / endl  - std::cout / std::cin streams
+=== Three Address Code ===
+    a = 84
+    b = 36
+L1:
+    t1 = b != 0
+    ifFalse t1 goto L2
+    t2 = a % b
+    r = t2
+    a = b
+    b = r
+    goto L1
+L2:
+    outs "GCD = "
+    out a
+    outnl
+    num = 12321
+    rev = 0
+    copy = num
+L3:
+    t3 = copy > 0
+    ifFalse t3 goto L4
+    t4 = rev * 10
+    t5 = copy % 10
+    t6 = t4 + t5
+    rev = t6
+    t7 = copy / 10
+    copy = t7
+    goto L3
+L4:
+    out num
+    t8 = rev == num
+    ifFalse t8 goto L5
+    outs " is"
+    goto L6
+L5:
+    outs " is not"
+L6:
+    outs " a palindrome"
+    outnl
+    goto L7
+L7:
+=== Optimized TAC ===
+    a = 84
+    b = 36
+L1:
+    t1 = b != 0
+    ifFalse t1 goto L2
+    r = a % b
+    a = b
+    b = r
+    goto L1
+L2:
+    outs "GCD = "
+    out a
+    outnl
+    num = 12321
+    rev = 0
+    copy = 12321
+L3:
+    t3 = copy > 0
+    ifFalse t3 goto L4
+    t4 = rev * 10
+    t5 = copy % 10
+    rev = t4 + t5
+    copy = copy / 10
+    goto L3
+L4:
+    out num
+    t8 = rev == num
+    ifFalse t8 goto L5
+    outs " is"
+    goto L6
+L5:
+    outs " is not"
+L6:
+    outs " a palindrome"
+    outnl
+=== Program Output ===
+GCD = 12
+12321 is a palindrome

@@ -1,0 +1,137 @@
+=== Headers ===
+Header              Line  Category      Role in this compiler
+------------------------------------------------------------------------
+<iostream>          1     I/O           enables cout / endl  - std::cout / std::cin streams
+=== Three Address Code ===
+    grid = 0
+    r = 1
+L1:
+    t1 = r <= 4
+    ifFalse t1 goto L2
+    c = 1
+L4:
+    t2 = c <= 4
+    ifFalse t2 goto L5
+    t3 = c > r
+    ifFalse t3 goto L7
+    goto L5
+L7:
+    t4 = r * c
+    out t4
+    outs "\t"
+    t5 = r * c
+    t6 = grid + t5
+    grid = t6
+    t7 = c + 1
+    c = t7
+    goto L4
+L5:
+    outnl
+    t8 = r + 1
+    r = t8
+    goto L1
+L2:
+    k = 10
+L8:
+    t9 = k > 0
+    ifFalse t9 goto L9
+    t10 = k - 3
+    k = t10
+    t11 = k == 4
+    ifFalse t11 goto L10
+    goto L8
+L10:
+    out k
+    outs " "
+    goto L8
+L9:
+    outnl
+    outs "grid="
+    out grid
+    outnl
+    t12 = grid > 20
+    t13 = grid == 100
+    t14 = !t13
+    t15 = t12 && t14
+    flag = t15
+    out flag
+    outnl
+    day = 3
+    t16 = day != 1
+    ifFalse t16 goto L12
+    t17 = day != 3
+    ifFalse t17 goto L13
+    goto L14
+L12:
+    outs "Mon"
+    goto L11
+L13:
+    outs "Wed"
+    goto L11
+L14:
+    outs "?"
+L11:
+    outnl
+    goto L15
+L15:
+=== Optimized TAC ===
+    grid = 0
+    r = 1
+L1:
+    t1 = r <= 4
+    ifFalse t1 goto L2
+    c = 1
+L4:
+    t2 = c <= 4
+    ifFalse t2 goto L5
+    t3 = c > r
+    ifFalse t3 goto L7
+    goto L5
+L7:
+    t4 = r * c
+    out t4
+    outs "\t"
+    t5 = r * c
+    grid = grid + t5
+    c = c + 1
+    goto L4
+L5:
+    outnl
+    r = r + 1
+    goto L1
+L2:
+    k = 10
+L8:
+    t9 = k > 0
+    ifFalse t9 goto L9
+    k = k - 3
+    t11 = k == 4
+    ifFalse t11 goto L10
+    goto L8
+L10:
+    out k
+    outs " "
+    goto L8
+L9:
+    outnl
+    outs "grid="
+    out grid
+    outnl
+    t12 = grid > 20
+    t13 = grid == 100
+    t14 = !t13
+    flag = t12 && t14
+    out flag
+    outnl
+    day = 3
+    outs "Wed"
+    outnl
+=== Program Output ===
+1	
+2	4	
+3	6	9	
+4	8	12	16	
+7 1 -2 
+grid=65
+1
+Wed

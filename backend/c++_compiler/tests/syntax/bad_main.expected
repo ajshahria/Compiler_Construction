@@ -1,0 +1,3 @@
+Syntax error [line 2]: syntax error, unexpected '{', expecting KW_VOID or ')'
+Syntax error [line 4]: syntax error, unexpected '}'
+Compilation failed: 0 lexical and 2 syntax error(s).

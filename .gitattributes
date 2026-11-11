@@ -1,0 +1,7 @@
+# keep line endings stable so tests/*.expected and run_tests.sh work on every machine
+*.sh text eol=lf
+*.expected text eol=lf
+*.cpp text eol=lf
+*.l text eol=lf
+*.y text eol=lf
+Makefile text eol=lf

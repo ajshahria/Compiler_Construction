@@ -1,0 +1,12 @@
+=== Headers ===
+Header              Line  Category      Role in this compiler
+------------------------------------------------------------------------
+<iostream>          1     I/O           enables cout / endl  - std::cout / std::cin streams
+Semantic error [line 4]: 'break' statement not within a loop or switch
+Semantic error [line 5]: 'continue' statement not within a loop
+Semantic error [line 8]: duplicate case value 1 in switch
+Semantic error [line 10]: duplicate 'default' label in switch
+Semantic error [line 12]: switch expression must be int, found float
+Semantic error [line 13]: undeclared variable 'y'
+Semantic error [line 14]: return value must be int, found float
+Compilation failed: 7 semantic error(s).

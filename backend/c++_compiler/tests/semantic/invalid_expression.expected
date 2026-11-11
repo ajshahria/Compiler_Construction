@@ -1,0 +1,11 @@
+=== Headers ===
+Header              Line  Category      Role in this compiler
+------------------------------------------------------------------------
+<iostream>          2     I/O           enables cout / endl  - std::cout / std::cin streams
+Semantic error [line 5]: invalid operands to '&&': int and bool (logical operators need bool operands)
+Semantic error [line 6]: invalid operand to '!': int (needs bool)
+Semantic error [line 8]: invalid operands to '%': float and int ('%' needs two int operands)
+Semantic error [line 9]: invalid operands to '+': bool and int (arithmetic needs int or float)
+Semantic error [line 10]: condition of 'if' must be bool, found int
+Semantic error [line 11]: condition of 'while' must be bool, found float
+Compilation failed: 6 semantic error(s).
