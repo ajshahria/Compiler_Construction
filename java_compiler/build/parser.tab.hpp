@@ -61,8 +61,9 @@
      GE = 278,
      AND = 279,
      OR = 280,
-     UMINUS = 281,
-     LOWER_THAN_ELSE = 282
+     INVALID = 281,
+     UMINUS = 282,
+     LOWER_THAN_ELSE = 283
    };
 #endif
 
@@ -73,12 +74,12 @@ typedef union YYSTYPE
 {
 
 /* Line 1685 of yacc.c  */
-#line 12 "src/parser/parser.y"
+#line 12 "java_compiler/src/parser/parser.y"
  char* str; struct Node* node; 
 
 
 /* Line 1685 of yacc.c  */
-#line 82 "build/parser.tab.hpp"
+#line 83 "java_compiler/build/parser.tab.hpp"
 } YYSTYPE;
 # define YYSTYPE_IS_TRIVIAL 1
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
