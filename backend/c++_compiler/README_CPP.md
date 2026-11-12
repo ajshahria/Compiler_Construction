@@ -45,7 +45,294 @@ Other files: `src/main.cpp` (driver), `src/common/` (types and error reporting),
 
 ---
 
-## 2. The language
+## 2. Diagrams
+
+GitHub draws these diagrams from the Mermaid code below.
+
+### 2.1 Compiler architecture
+
+Each phase reads the output of the one before it. The driver (`src/main.cpp`) stops after any phase that reports an error.
+
+```mermaid
+flowchart TD
+    SRC["Source program (.cpp)"] --> LEX
+    LEX["1 · Lexer (Flex)<br/>lexer.l"] -- tokens --> PAR
+    LEX -. "#include lines" .-> PRE["Preprocessor<br/>headers.cpp"]
+    PAR["2 · Parser (Bison)<br/>parser.y"] -- AST --> SEM
+    SEM["3 · Semantic analyzer<br/>semantic.cpp"] -- "type-checked AST" --> TAC
+    SEM <-- "insert / lookup" --> SYM[("Symbol table<br/>stack of scopes")]
+    SYM -- "unique names x, x_1" --> TAC
+    TAC["4 · TAC generator<br/>tac.cpp"] -- TAC --> OPT
+    OPT["5 · Optimizer<br/>optimizer.cpp"] -- "optimized TAC" --> GEN
+    OPT -- "optimized TAC" --> RUN
+    GEN["6 · Code generator<br/>codegen.cpp"] --> ASM["x86 assembly (.s)"]
+    RUN["TAC interpreter<br/>interpreter.cpp"] --> OUT["Program output"]
+
+    LEX -. "lexical errors" .-> DIAG
+    PAR -. "syntax errors" .-> DIAG
+    SEM -. "semantic errors" .-> DIAG
+    DIAG["Diagnostics<br/>diagnostics.cpp<br/>Phase error [line N]: message"]
+```
+
+### 2.2 ER diagram (data model)
+
+The data structures the phases create, and how they relate. `SCOPE` has no struct of its own: it is the `scopeId` number in `Symbol` plus one map on the symbol table's scope stack.
+
+```mermaid
+erDiagram
+    SOURCE_FILE ||--o{ TOKEN : "is lexed into"
+    SOURCE_FILE ||--o{ HEADER : "includes"
+    SOURCE_FILE ||--o{ DIAGNOSTIC : "has errors at"
+    TOKEN }o--o{ AST_NODE : "is reduced into"
+    AST_NODE ||--o{ AST_NODE : "has children"
+    SCOPE ||--o{ SCOPE : "encloses"
+    SCOPE ||--o{ SYMBOL : "declares"
+    AST_NODE }o--o| SYMBOL : "Ident / VarDecl resolves to"
+    TAC_PROGRAM ||--|{ INSTR : "contains"
+    TAC_PROGRAM ||--o{ SYMBOL : "lists as vars"
+    INSTR ||--|{ OPERAND : "result, a, b"
+    OPERAND }o--o| SYMBOL : "Var operand names"
+
+    SOURCE_FILE {
+        string path
+    }
+    TOKEN {
+        int type "KW_INT, IDENTIFIER, INT_LIT ..."
+        string text "yytext"
+        int line "yylineno"
+    }
+    HEADER {
+        string name "iostream"
+        int line
+        string category
+    }
+    DIAGNOSTIC {
+        enum phase "LEXICAL, SYNTAX, SEMANTIC"
+        int line
+        string message
+    }
+    AST_NODE {
+        enum kind "Program, If, While, Binary ..."
+        int line
+        enum type "int, float, bool, error"
+    }
+    SCOPE {
+        int scopeId PK "0 = global"
+    }
+    SYMBOL {
+        string name
+        string uname "x, x_1 (unique TAC name)"
+        enum type "int, float, bool"
+        int scopeId FK
+        int line "line declared"
+    }
+    TAC_PROGRAM {
+        vector code
+        vector vars
+    }
+    INSTR {
+        enum op "Assign, Add, IfFalse, Goto, Label, Print ..."
+        enum ty
+        string label "L1, L2 ..."
+    }
+    OPERAND {
+        enum kind "Var, Temp, IntC, FloatC, BoolC"
+        string name "x or t1"
+        long iv
+        double fv
+        enum ty
+    }
+```
+
+### 2.3 AST class diagram
+
+Every node derives from `Node` (`src/ast/ast.h`). The first group is the manual's core language; the second is the C++ syntax on top of it.
+
+```mermaid
+classDiagram
+    class Node {
+        <<abstract>>
+        +NodeKind kind
+        +int line
+        +Type type
+        +print(os, indent)
+    }
+    class BlockNode {
+        +vector~Node~ stmts
+    }
+    class VarDeclNode {
+        +Type declType
+        +string name
+        +string uname
+        +Node init
+    }
+    class AssignNode {
+        +string name
+        +string uname
+        +Node value
+    }
+    class IfNode {
+        +Node cond
+        +Node thenStmt
+        +Node elseStmt
+    }
+    class WhileNode {
+        +Node cond
+        +Node body
+        +Node step
+    }
+    class PrintNode {
+        +Node expr
+    }
+    class BinaryNode {
+        +string op
+        +Node left
+        +Node right
+    }
+    class UnaryNode {
+        +string op
+        +Node operand
+    }
+    class IdentNode {
+        +string name
+        +string uname
+    }
+    class IntLitNode {
+        +long value
+    }
+    class FloatLitNode {
+        +double value
+    }
+    class BoolLitNode {
+        +bool value
+    }
+    class DoWhileNode {
+        +Node body
+        +Node cond
+    }
+    class SwitchNode {
+        +Node expr
+        +vector~SwitchCase~ cases
+    }
+    class JumpNode {
+        break or continue
+    }
+    class ReturnNode {
+        +Node value
+    }
+    class TernaryNode {
+        +Node cond
+        +Node a
+        +Node b
+    }
+    class CoutNode {
+        +vector~CoutItem~ items
+    }
+    class CinNode {
+        +vector~IdentNode~ vars
+    }
+
+    Node <|-- BlockNode
+    Node <|-- VarDeclNode
+    Node <|-- AssignNode
+    Node <|-- IfNode
+    Node <|-- WhileNode
+    Node <|-- PrintNode
+    Node <|-- BinaryNode
+    Node <|-- UnaryNode
+    Node <|-- IdentNode
+    Node <|-- IntLitNode
+    Node <|-- FloatLitNode
+    Node <|-- BoolLitNode
+    Node <|-- DoWhileNode
+    Node <|-- SwitchNode
+    Node <|-- JumpNode
+    Node <|-- ReturnNode
+    Node <|-- TernaryNode
+    Node <|-- CoutNode
+    Node <|-- CinNode
+    BlockNode o-- "0..*" Node : stmts
+```
+
+### 2.4 Phase sequence
+
+How the driver calls the phases. The lexer does not run on its own: Bison calls `yylex()` each time it needs the next token.
+
+```mermaid
+sequenceDiagram
+    participant M as main.cpp (driver)
+    participant P as Parser (yyparse)
+    participant L as Lexer (yylex)
+    participant S as Semantic (analyze)
+    participant T as Symbol table
+    participant G as TAC generator
+    participant O as Optimizer
+
+    M->>P: yyparse()
+    loop until end of file
+        P->>L: yylex()
+        L-->>P: next token + line number
+        P->>P: reduce a rule, build an AST node
+    end
+    P-->>M: g_program (AST root)
+    alt lexical or syntax errors
+        M-->>M: print error count, exit 1
+    end
+    M->>S: analyze(AST, table)
+    S->>T: enterScope / insert / lookup / exitScope
+    S-->>M: number of semantic errors
+    alt semantic errors
+        M-->>M: print error count, exit 1
+    end
+    M->>G: generateTAC(AST, table)
+    G-->>M: TacProgram
+    M->>O: optimize(TAC)
+    O-->>M: optimized TacProgram
+```
+
+### 2.5 Identifier lookup (semantic analysis)
+
+How the semantic analyzer decides between "found", "undeclared variable" and "scope violation".
+
+```mermaid
+flowchart TD
+    A["Identifier x used"] --> B{"x in the innermost<br/>open scope?"}
+    B -- yes --> F["Use that symbol<br/>(its uname goes into the TAC)"]
+    B -- no --> C{"x in an outer<br/>open scope?"}
+    C -- yes --> F
+    C -- no --> D{"x declared in a block<br/>that has ended? (findClosed)"}
+    D -- yes --> E1["scope violation: 'x' was declared<br/>in an inner block (line N)"]
+    D -- no --> E2["undeclared variable 'x'"]
+```
+
+### 2.6 TAC patterns for control flow
+
+`if-else` and `while` become labels and jumps (`src/tac/tac.cpp`).
+
+```mermaid
+flowchart LR
+    subgraph IF ["if (c) S1 else S2"]
+        direction TB
+        i1["t = code for c"] --> i2{"ifFalse t goto L1"}
+        i2 -- "t is true" --> i3["S1"]
+        i3 --> i4["goto L2"]
+        i2 -- "t is false" --> i5["L1: S2"]
+        i4 --> i6["L2: next statement"]
+        i5 --> i6
+    end
+    subgraph WHILE ["while (c) S"]
+        direction TB
+        w1["L1: t = code for c"] --> w2{"ifFalse t goto L2"}
+        w2 -- "t is true" --> w3["S"]
+        w3 --> w4["goto L1"]
+        w4 --> w1
+        w2 -- "t is false" --> w5["L2: next statement"]
+    end
+```
+
+---
+
+## 3. The language
 
 **Core language** (fixed by the lab manual):
 
@@ -93,7 +380,7 @@ The formal grammar is in [`docs/grammar.md`](docs/grammar.md).
 
 ---
 
-## 3. Requirements
+## 4. Requirements
 
 - `g++` (C++11 or newer), `flex`, `bison`, `make`
 - On Windows: MinGW with MSYS, run commands in **Git Bash**
@@ -103,7 +390,7 @@ Tested with MinGW GCC 6.3, Flex 2.5.35, Bison 2.4.2, GNU Make 3.81.
 
 ---
 
-## 4. How to build and run
+## 5. How to build and run
 
 Run everything from the compiler folder (`backend/c++_compiler` inside the repository):
 
@@ -173,7 +460,7 @@ Runs every program in `tests/` and compares the result with its `.expected` file
 
 ---
 
-## 5. Example
+## 6. Example
 
 Input (`examples/sample.cpp`, the manual's sample; compile it with `--manual`):
 
@@ -233,7 +520,7 @@ Compilation failed: 6 semantic error(s).
 
 ---
 
-## 6. Errors the compiler reports
+## 7. Errors the compiler reports
 
 | Kind | Examples |
 |---|---|
@@ -245,7 +532,7 @@ Compilation stops before the next phase if the current one found errors.
 
 ---
 
-## 7. Project layout
+## 8. Project layout
 
 All C++ compiler files live in `backend/c++_compiler/`:
 
@@ -274,9 +561,9 @@ Makefile
 
 ---
 
-## 8. Limitations
+## 9. Limitations
 
-- Only the language described in section 2. **Not supported yet:** functions other than `main`, arrays, pointers, `std::string` variables, `char` variables, classes/structs, `unsigned`, `goto`, `#define`. A program using them stops with a syntax error.
+- Only the language described in section 3. **Not supported yet:** functions other than `main`, arrays, pointers, `std::string` variables, `char` variables, classes/structs, `unsigned`, `goto`, `#define`. A program using them stops with a syntax error.
 - Text can only be written with `cout` (including `cout << (cond ? "yes" : "no")`); it cannot be stored in a variable.
 - `double` has the same precision as `float` in the generated assembly (the interpreter uses full doubles).
 - The assembly targets 32-bit MinGW on Windows. It uses `_main` and `_printf` names, so it will not assemble unchanged on Linux.
