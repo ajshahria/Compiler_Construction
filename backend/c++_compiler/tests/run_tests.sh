@@ -11,9 +11,10 @@ for f in tests/*/*.cpp; do
     extra=$(head -1 "$f" | sed -n 's#^// flags: ##p' | tr -d '\r')
     # a test can give 'cin' input with a line near the top:  // stdin: 2 5
     input=$(head -3 "$f" | sed -n 's#^// stdin: ##p' | tr -d '\r')
-    actual=$(echo "$input" | $COMPILER $extra --headers --tac --opt --run "$f" 2>&1)
+    # strip '\r' so Windows (CRLF) output and checkouts compare equal to the LF .expected files
+    actual=$(echo "$input" | $COMPILER $extra --headers --tac --opt --run "$f" 2>&1 | tr -d '\r')
     if [ "$1" == "--update" ]; then echo "$actual" > "$exp"; continue; fi
-    if [ "$actual" == "$(cat "$exp" 2>/dev/null)" ]; then
+    if [ "$actual" == "$(tr -d '\r' < "$exp" 2>/dev/null)" ]; then
         pass=$((pass+1)); echo "PASS  $f"
     else
         fail=$((fail+1)); echo "FAIL  $f"
