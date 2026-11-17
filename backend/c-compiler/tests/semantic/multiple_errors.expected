@@ -1,0 +1,4 @@
+exit 1
+line 2: semantic error: redeclaration of 'score' (already declared at line 1 in this scope)
+line 3: semantic error: undeclared variable 'missing'
+Compilation failed: 2 semantic error(s).

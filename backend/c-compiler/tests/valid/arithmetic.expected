@@ -1,0 +1,8 @@
+exit 0
+t1 = 3 * 4
+t2 = 2 + t1
+a = t2
+t3 = 6.0 / 2.0
+ratio = t3
+print a
+print ratio

@@ -11,7 +11,7 @@
     {
       "label": "Run Tricora example",
       "type": "shell",
-      "command": "./build/tricora --ir examples/valid/control.tri",
+      "command": "./build/tricora --all examples/valid/manual_sample.tri",
       "dependsOn": "Build Tricora",
       "problemMatcher": []
     }

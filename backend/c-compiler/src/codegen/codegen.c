@@ -1,8 +1,195 @@
+/*
+ * codegen.c - Three Address Code generator.
+ *
+ * Every instruction has at most one operator and three addresses:
+ *
+ *     x = y                 copy
+ *     t1 = a + b            binary operation (any arithmetic/relational/logical op)
+ *     t2 = - a  /  t2 = ! a unary operation
+ *     ifFalse t3 goto L1    conditional jump
+ *     goto L2               unconditional jump
+ *     L1:                   label
+ *     print x               output
+ *
+ * Variables use the unique TAC name picked by the symbol table, so a
+ * variable that shadows an outer one (x and x@3) never shares its storage.
+ *
+ * Expressions are translated bottom-up: each operator writes its result into a
+ * new temporary t1, t2, ... and the temporary's name is returned to the
+ * caller. The parser already built the tree with the right precedence, so
+ * a post-order walk evaluates operators in the right order.
+ *
+ * Control flow:
+ *     if (c) S              if (c) S1 else S2         while (c) S
+ *       <code for c>          <code for c>            L1:
+ *       ifFalse c goto L1     ifFalse c goto L1         <code for c>
+ *       <S>                   <S1>                      ifFalse c goto L2
+ *     L1:                     goto L2                   <S>
+ *                           L1:                         goto L1
+ *                             <S2>                    L2:
+ *                           L2:
+ */
 #include "codegen.h"
-#include <stdlib.h>
-static FILE*out;static int temp,label;
-static const char*op(int x){switch(x){case OP_ADD:return "+";case OP_SUB:return "-";case OP_MUL:return "*";case OP_DIV:return "/";case OP_MOD:return "%";case OP_EQ:return "==";case OP_NE:return "!=";case OP_LT:return "<";case OP_LE:return "<=";case OP_GT:return ">";case OP_GE:return ">=";case OP_AND:return "&&";case OP_OR:return "||";default:return "?";}}
-static char*expr(Expr*e){if(!e)return "0";char b[128];switch(e->kind){case EX_INT:snprintf(b,sizeof b,"%ld",e->as.integer);break;case EX_FLOAT:snprintf(b,sizeof b,"%g",e->as.real);break;case EX_BOOL:return e->as.boolean?"true":"false";case EX_NAME:return e->as.name;case EX_UNARY:{char*a=expr(e->as.unary.child);snprintf(b,sizeof b,"%s%s",e->as.unary.op==OP_NOT?"!":"-",a);break;}case EX_BINARY:{char*a=expr(e->as.binary.left),*c=expr(e->as.binary.right);int n=++temp;fprintf(out,"t%d = %s %s %s\n",n,a,op(e->as.binary.op),c);snprintf(b,sizeof b,"t%d",n);break;}}char*r=malloc(128);snprintf(r,128,"%s",b);return r;}
-static void stmt(Stmt*s){if(!s)return;switch(s->kind){case ST_BLOCK:for(size_t i=0;s->as.block&&i<s->as.block->count;i++)stmt(s->as.block->items[i]);break;case ST_DECL:if(s->as.decl.init)fprintf(out,"%s = %s\n",s->as.decl.name,expr(s->as.decl.init));break;case ST_ASSIGN:fprintf(out,"%s = %s\n",s->as.assign.name,expr(s->as.assign.value));break;case ST_PRINT:fprintf(out,"print %s\n",expr(s->as.print));break;case ST_EXPR:(void)expr(s->as.expression);break;case ST_IF:{int a=++label,b=++label;fprintf(out,"ifFalse %s goto L%d\n",expr(s->as.branch.condition),a);stmt(s->as.branch.yes);if(s->as.branch.no){fprintf(out,"goto L%d\nL%d:\n",b,a);stmt(s->as.branch.no);fprintf(out,"L%d:\n",b);}else fprintf(out,"L%d:\n",a);break;}case ST_WHILE:{int a=++label,b=++label;fprintf(out,"L%d:\n",a);fprintf(out,"ifFalse %s goto L%d\n",expr(s->as.loop.condition),b);stmt(s->as.loop.body);fprintf(out,"goto L%d\nL%d:\n",a,b);break;}case ST_ERROR:break;}}
-void generate_ir(StmtList*p,FILE*f){out=f;temp=label=0;fprintf(out,"# Tricora three-address code\n");for(size_t i=0;p&&i<p->count;i++)stmt(p->items[i]);}
 
+#include <stdlib.h>
+#include <string.h>
+
+static FILE *out;
+static int temp_count;
+static int label_count;
+
+static char *copy_string(const char *text)
+{
+    char *copy = malloc(strlen(text) + 1);
+    if (copy == NULL) {
+        perror("out of memory");
+        exit(2);
+    }
+    strcpy(copy, text);
+    return copy;
+}
+
+static char *new_temp(void)
+{
+    char name[32];
+    snprintf(name, sizeof name, "t%d", ++temp_count);
+    return copy_string(name);
+}
+
+static int new_label(void)
+{
+    return ++label_count;
+}
+
+/* Float literals always keep a decimal point so 3.0 is not printed as 3. */
+static char *float_text(double value)
+{
+    char text[64];
+    snprintf(text, sizeof text, "%g", value);
+    if (strpbrk(text, ".eE") == NULL)
+        strcat(text, ".0");
+    return copy_string(text);
+}
+
+/* Emits the code for an expression and returns the address (variable,
+ * constant or temporary) that holds its value. */
+static char *gen_expr(Expr *e)
+{
+    char text[64];
+
+    switch (e->kind) {
+    case EX_INT:
+        snprintf(text, sizeof text, "%ld", e->as.integer);
+        return copy_string(text);
+    case EX_FLOAT:
+        return float_text(e->as.real);
+    case EX_BOOL:
+        return copy_string(e->as.boolean ? "true" : "false");
+    case EX_NAME:
+        return copy_string(e->tac_name ? e->tac_name : e->as.name);
+    case EX_BINARY: {
+        char *left = gen_expr(e->as.binary.left);
+        char *right = gen_expr(e->as.binary.right);
+        char *result = new_temp();
+        fprintf(out, "%s = %s %s %s\n", result, left, operator_symbol(e->as.binary.op), right);
+        free(left);
+        free(right);
+        return result;
+    }
+    case EX_UNARY: {
+        char *operand = gen_expr(e->as.unary.operand);
+        char *result = new_temp();
+        fprintf(out, "%s = %s %s\n", result, operator_symbol(e->as.unary.op), operand);
+        free(operand);
+        return result;
+    }
+    }
+    return copy_string("?");
+}
+
+/* Emits `name = <expr>`. */
+static void gen_assignment(const char *name, Expr *value)
+{
+    char *address = gen_expr(value);
+    fprintf(out, "%s = %s\n", name, address);
+    free(address);
+}
+
+static void gen_list(StmtList *list);
+
+static void gen_stmt(Stmt *s)
+{
+    if (s == NULL)
+        return;
+
+    switch (s->kind) {
+    case ST_DECL:
+        /* A declaration only produces code when it has an initializer. */
+        if (s->as.decl.init)
+            gen_assignment(s->as.decl.tac_name, s->as.decl.init);
+        break;
+
+    case ST_ASSIGN:
+        gen_assignment(s->as.assign.tac_name, s->as.assign.value);
+        break;
+
+    case ST_PRINT: {
+        char *address = gen_expr(s->as.print);
+        fprintf(out, "print %s\n", address);
+        free(address);
+        break;
+    }
+
+    case ST_IF: {
+        int else_label = new_label();
+        char *cond = gen_expr(s->as.if_stmt.cond);
+        fprintf(out, "ifFalse %s goto L%d\n", cond, else_label);
+        free(cond);
+        gen_stmt(s->as.if_stmt.then_branch);
+        if (s->as.if_stmt.else_branch) {
+            int end_label = new_label();
+            fprintf(out, "goto L%d\n", end_label);
+            fprintf(out, "L%d:\n", else_label);
+            gen_stmt(s->as.if_stmt.else_branch);
+            fprintf(out, "L%d:\n", end_label);
+        } else {
+            fprintf(out, "L%d:\n", else_label);
+        }
+        break;
+    }
+
+    case ST_WHILE: {
+        int start_label = new_label();
+        int end_label = new_label();
+        fprintf(out, "L%d:\n", start_label);
+        char *cond = gen_expr(s->as.while_stmt.cond);
+        fprintf(out, "ifFalse %s goto L%d\n", cond, end_label);
+        free(cond);
+        gen_stmt(s->as.while_stmt.body);
+        fprintf(out, "goto L%d\n", start_label);
+        fprintf(out, "L%d:\n", end_label);
+        break;
+    }
+
+    case ST_BLOCK:
+        gen_list(s->as.block);
+        break;
+
+    case ST_ERROR:
+        break;
+    }
+}
+
+static void gen_list(StmtList *list)
+{
+    for (size_t i = 0; list != NULL && i < list->count; i++)
+        gen_stmt(list->items[i]);
+}
+
+void generate_tac(StmtList *program, FILE *output)
+{
+    out = output;
+    temp_count = 0;
+    label_count = 0;
+    gen_list(program);
+}

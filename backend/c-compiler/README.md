@@ -1,72 +1,112 @@
 # Tricora C Compiler
 
-A small educational compiler for the shared language specified by the lab manual, as the C component of the Tricora group project. It demonstrates Flex lexical analysis, Bison parsing, AST construction, a scoped symbol table, semantic analysis, and three-address intermediate code generation. It deliberately does not generate machine code.
+The C component of the Tricora group project for the Compiler Construction Lab (Metropolitan University, CSE). It is a compiler front-end for the mini language fixed by the lab manual (section 5), built with **Flex** and **Bison** in C. It turns a source program into **Three Address Code (TAC)**, going through every required phase:
+
+```text
+source (.tri) -> Lexical Analyzer (Flex) -> tokens
+              -> Syntax Analyzer (Bison) -> Abstract Syntax Tree
+              -> Semantic Analyzer (symbol table + type checking) -> validated AST
+              -> Intermediate Code Generator -> Three Address Code
+```
+
+Following manual section 6, it stops at TAC: it does not generate machine code or assembly.
+
+## Team
+
+| Member | Responsibility |
+|---|---|
+| Sabika Rahman | C language compiler (this folder) |
+| Abdul Julil Shahria | C++ language compiler and UI (`backend/c++_compiler`) |
+| Saima Suchi | Java language compiler |
+
+## Features
+
+- **Lexer**: keywords `int float bool if else while print true false`, identifiers, integer/float/bool literals, all operators of section 5.3, delimiters `{ } ( ) ;`. `//` and `/* */` comments and all whitespace are discarded. Invalid characters, identifiers that start with a digit, and unterminated comments are reported as lexical errors with line numbers.
+- **Parser**: an unambiguous Bison grammar (no conflicts) with precedence and associativity declarations. Syntax errors are reported with line numbers; a missing `;` is reported on the line where it belongs. Error recovery skips to the next `;` or `}`, so several errors are reported in one run.
+- **AST**: one node type per construct (`VarDecl`, `Assign`, `Print`, `If`, `IfElse`, `While`, `Block`, `BinaryOp`, `UnaryOp`, `Identifier`, literals), printed as an indented tree with `--ast`.
+- **Symbol table**: a stack of scopes, where each `{ }` block opens a new one. Each entry records name, type, scope id, depth and declaration line. It is printed with `--symtab`.
+- **Semantic analysis**: detects undeclared variables, redeclarations, scope violations, type mismatches, invalid assignments, invalid expressions and non-bool `if`/`while` conditions.
+- **TAC generation**: arithmetic with correct precedence, relational and logical expressions, `if`, `if-else`, `while` with labels and `ifFalse`/`goto` jumps, and `print`. A variable that shadows an outer one gets its own TAC name (`n@3`).
 
 ## Requirements
 
-- Windows with VS Code
-- [MSYS2](https://www.msys2.org/) UCRT64 environment with GCC, Make, Flex, and Bison
-- VS Code C/C++ extension (optional, for editing assistance)
+GCC, GNU Make, Flex and Bison (Bison 2.4 or newer). Any of these toolchains works:
 
-After installing MSYS2, open the **MSYS2 UCRT64** terminal and install the tools with:
+- **Windows, MinGW/MSYS** (the toolchain used during development): `gcc`, `make`, `flex`, `bison` on `PATH`.
+- **Windows, MSYS2 UCRT64**: `pacman -S --needed base-devel mingw-w64-ucrt-x86_64-gcc flex bison`.
+- **Ubuntu/Debian**: `sudo apt install build-essential flex bison`.
 
-```sh
-pacman -Syu
-pacman -S --needed base-devel mingw-w64-ucrt-x86_64-gcc flex bison
-```
+## Build
 
-If the first `pacman -Syu` update closes the terminal, reopen UCRT64 and run `pacman -Syu` again before installing the packages.
-
-Open the `tricora-c` folder in VS Code. Open a UCRT64 terminal in VS Code (Terminal > New Terminal, choose UCRT64) and run:
+From this folder (`backend/c-compiler`):
 
 ```sh
 make
-./build/tricora examples/valid/control.tri
-./build/tricora --tokens examples/valid/control.tri
-./build/tricora --ast examples/valid/control.tri
-./build/tricora --ir examples/valid/control.tri
 ```
 
-To emit IR to a file: `./build/tricora --ir examples/valid/control.tri -o output.ir`.
+This generates `build/parser.tab.c`, `build/parser.tab.h` and `build/lex.yy.c`, then builds `build/tricora` (`build/tricora.exe` on Windows). `make clean` removes the `build/` folder.
 
-## Language overview
+## Run
 
-Types: `int`, `float`, and `bool`. Statements: declarations, assignments, blocks, `if`/`else`, `while`, and `print`. Operators include arithmetic (including modulo), relational, equality, and boolean operators. Variables must be declared before use; same-scope redeclaration and invalid type use are errors. Braces create scopes. `//` and `/* ... */` comments are supported. Check `docs/grammar.md` against the exact mini-language specification your instructor gave your group before submission.
+```sh
+./build/tricora examples/valid/manual_sample.tri            # Three Address Code (default)
+./build/tricora --tokens examples/valid/manual_sample.tri   # token stream
+./build/tricora --ast    examples/valid/manual_sample.tri   # abstract syntax tree
+./build/tricora --symtab examples/valid/manual_sample.tri   # symbol table
+./build/tricora --all    examples/valid/manual_sample.tri   # all of the above
+./build/tricora examples/valid/manual_sample.tri -o out.tac # write the output to a file
+```
 
-The complete grammar is in `docs/grammar.md`. Implementation notes and the required report outline are in `docs/PROJECT_REPORT.md`.
+The exit status is `0` when the program compiles, `1` when it has errors, and `2` for a usage or file problem. Error messages go to standard error in the form `line N: <kind> error: <description>`.
+
+Example: the manual's section 4.6 program
+
+```text
+int a;  int b;  int c;
+a = 5;  b = 10;  c = a + b * 2;
+```
+
+produces
+
+```text
+a = 5
+b = 10
+t1 = b * 2
+t2 = a + t1
+c = t2
+```
+
+## Tests
+
+```sh
+make test
+```
+
+This runs every program in `tests/` and compares the compiler's output and exit status with the matching `.expected` file. If you change the compiler's output on purpose, regenerate the expected files with `sh tests/run_tests.sh --update`.
+
+| Folder | What it demonstrates |
+|---|---|
+| `tests/valid/` | Programs that compile to TAC: the manual's sample (5.5), the manual's TAC example (4.6), arithmetic, loops/branches, nested scopes with shadowing |
+| `tests/lexical/` | Invalid character, identifier starting with a digit, unterminated comment |
+| `tests/syntax/` | Missing semicolon, missing parenthesis, several errors in one file (recovery) |
+| `tests/semantic/` | One program per rule in manual 4.5: undeclared, redeclaration, scope violation, type mismatch, invalid assignment, invalid expression; also a non-bool condition and several errors in one file |
 
 ## Project layout
 
 ```text
-docs/       grammar and report guide
-src/        compiler implementation, grouped as in the lab manual
-  lexer/    Flex lexical analyzer
-  parser/   Bison grammar and parser
-  ast/      AST nodes and display
-  semantic/ semantic checks
-  symbol_table/ scoped symbol table
-  codegen/  three-address code generation
-  main.c    command-line driver
-tests/      valid and invalid compiler inputs
-examples/   demo programs
-build/      generated parser/lexer and executable (created by make)
+docs/
+  grammar.md          formal CFG of the language
+  PROJECT_REPORT.md   project report (manual section 12)
+src/
+  lexer/lexer.l       Flex lexical analyzer
+  parser/parser.y     Bison grammar, builds the AST
+  ast/                AST node definitions, constructors, printer
+  symbol_table/       scoped symbol table
+  semantic/           scope and type checking
+  codegen/            Three Address Code generator
+  main.c              command-line driver
+tests/                test programs + .expected outputs + run_tests.sh
+examples/             sample programs (valid/ and invalid/)
+Makefile              `make`, `make test`, `make clean`
+build/                generated files and the executable (not committed)
 ```
-
-## GitHub workflow
-
-The lab manual requires **one shared GitHub repository for the three-member group**. Use your existing team repository; if it has not been created yet, coordinate with your teammates so one person creates it. Do not make a separate repository for each language component.
-
-1. Clone the shared repository to your computer (use the HTTPS or SSH URL shown by GitHub):
-   `git clone <team-repository-url>`
-2. Copy this whole `tricora-c` folder into the cloned repository and, if your team prefers, rename it `c-compiler` and place it under `backend/`.
-3. In the UCRT64 terminal, change directory to the cloned repository root and run:
-
-```sh
-git status
-git add backend/c-compiler/
-git commit -m "Add C compiler frontend"
-git push
-```
-
-If you kept the folder name `tricora-c`, use `git add tricora-c/` instead. Do not commit generated files in `build/`; the `.gitignore` excludes them. Each member should make meaningful commits during development, as the manual requires.
-

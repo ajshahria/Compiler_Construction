@@ -1,7 +1,15 @@
+/*
+ * codegen.h - Three Address Code (TAC) generation from the checked AST.
+ */
 #ifndef TRICORA_CODEGEN_H
 #define TRICORA_CODEGEN_H
-#include "ast.h"
-#include <stdio.h>
-void generate_ir(StmtList *program, FILE *out);
-#endif
 
+#include "ast.h"
+
+#include <stdio.h>
+
+/* Writes the TAC of the whole program to `out`. Must only be called on a
+ * program that passed semantic analysis. */
+void generate_tac(StmtList *program, FILE *out);
+
+#endif
