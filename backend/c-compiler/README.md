@@ -58,12 +58,12 @@ The lab manual requires **one shared GitHub repository for the three-member grou
 
 1. Clone the shared repository to your computer (use the HTTPS or SSH URL shown by GitHub):
    `git clone <team-repository-url>`
-2. Copy this whole `tricora-c` folder into the cloned repository and, if your team prefers, rename it `c-compiler`.
+2. Copy this whole `tricora-c` folder into the cloned repository and, if your team prefers, rename it `c-compiler` and place it under `backend/`.
 3. In the UCRT64 terminal, change directory to the cloned repository root and run:
 
 ```sh
 git status
-git add c-compiler/
+git add backend/c-compiler/
 git commit -m "Add C compiler frontend"
 git push
 ```
