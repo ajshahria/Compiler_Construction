@@ -9,6 +9,12 @@
 
 bool hadLexicalError = false;
 
+#define YY_USER_ACTION \
+    yylloc.first_line = yylineno; \
+    yylloc.last_line = yylineno; \
+    yylloc.first_column = 1; \
+    yylloc.last_column = 1;
+
 static char* copyText(const char* s) {
     size_t n = strlen(s) + 1;
     char* p = (char*)malloc(n);

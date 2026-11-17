@@ -1,0 +1,7 @@
+program (Example) [line 1]
+  block [line 2]
+    decl (int) [line 3]
+      id (x) [line 3]
+      literal (10) [line 3]
+    print [line 4]
+      id (x) [line 4]

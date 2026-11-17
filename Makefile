@@ -40,7 +40,7 @@ run: all
 	$(COMPILER) java_compiler/examples/Example.java
 
 $(UI): java_compiler/ui/main.cpp
-	$(CXX) -std=c++17 -Wall -Wextra -O2 -mwindows $< -o $@ -lcomdlg32
+	$(CXX) -std=c++17 -Wall -Wextra -O2 -mwindows $< -o $@ -lcomdlg32 -lcomctl32
 
 ui: all $(UI)
 	$(UI)

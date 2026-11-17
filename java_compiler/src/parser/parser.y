@@ -40,16 +40,19 @@ statement: controlled_statement { $$=$1; }
          makeNode("id",$2,@2.first_line));
      free($2);
  }
+ | INT IDENT error { fprintf(stderr,"line %d: syntax error: expected ';' after declaration\n",@1.first_line); YYABORT; }
  | FLOAT IDENT ';' {
      $$=makeNode("decl","float",@1.first_line,
          makeNode("id",$2,@2.first_line));
      free($2);
  }
+ | FLOAT IDENT error { fprintf(stderr,"line %d: syntax error: expected ';' after declaration\n",@1.first_line); YYABORT; }
  | BOOLEAN IDENT ';' {
      $$=makeNode("decl","boolean",@1.first_line,
          makeNode("id",$2,@2.first_line));
      free($2);
  }
+ | BOOLEAN IDENT error { fprintf(stderr,"line %d: syntax error: expected ';' after declaration\n",@1.first_line); YYABORT; }
  | INT IDENT '=' expression ';' {
      $$=makeNode("decl","int",@1.first_line,
          makeNode("id",$2,@2.first_line),$4);
@@ -109,4 +112,5 @@ expression: NUMBER { $$=makeNode("literal",$1,@1.first_line); free($1); }
  | expression OR expression { $$=makeNode("binary","||",@2.first_line,$1,$3); }
 ;
 %%
-void yyerror(const char*s){fprintf(stderr,"line %d: syntax error: %s\n",yylineno,s);}
+extern YYLTYPE yylloc;
+void yyerror(const char*s){fprintf(stderr,"line %d: syntax error: %s\n",yylloc.first_line,s);}

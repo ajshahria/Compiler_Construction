@@ -5,6 +5,16 @@
 
 #include <cstdio>
 #include <iostream>
+#include <sstream>
+
+static void dumpAst(Node* node, std::ostream& out, int depth=0) {
+    if (!node) return;
+    for (int i=0;i<depth;++i) out << "  ";
+    out << node->kind;
+    if (!node->text.empty()) out << " (" << node->text << ")";
+    out << " [line " << node->line << "]\n";
+    for (Node* child : node->children) dumpAst(child,out,depth+1);
+}
 
 extern FILE* yyin;
 extern int yyparse();
@@ -59,6 +69,8 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Syntax analysis successful!\n";
 
+    { std::ofstream astFile("ast.txt"); dumpAst(syntaxRoot, astFile); }
+
     // Phase 3
     std::cout << "\n[2] Semantic Analysis\n";
 
@@ -70,6 +82,7 @@ int main(int argc, char* argv[]) {
     }
 
     std::cout << "Semantic analysis successful!\n";
+    { std::ofstream symbolsFile("symbols.txt"); symbolsFile << symbolTableReport(); }
 
     // Phase 4
     std::cout << "\n[3] Intermediate Code Generation\n";

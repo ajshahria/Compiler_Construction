@@ -2,10 +2,12 @@
 #include "symbol_table/symbol_table.h"
 
 #include <iostream>
+#include <sstream>
 #include <string>
 
 static int errors = 0;
 static SymbolTable symbols;
+static std::ostringstream symbolReport;
 
 static bool isNumeric(Type t) {
     return t == Type::Int || t == Type::Float;
@@ -156,6 +158,7 @@ static void stmt(Node* n) {
             ++errors;
             return;
         }
+        symbolReport << name << " : " << typeName(t) << (hasInitializer ? " (initialized)" : " (uninitialized)") << '\n';
 
         if (hasInitializer) {
             Type initType = expr(n->children[1]);
@@ -247,6 +250,8 @@ static void stmt(Node* n) {
 bool analyze(Node* root) {
     errors = 0;
     symbols = SymbolTable{};
+    symbolReport.str("");
+    symbolReport.clear();
 
     if (root) {
         for (Node* child : root->children) stmt(child);
@@ -259,3 +264,5 @@ bool analyze(Node* root) {
     }
     return true;
 }
+
+std::string symbolTableReport() { return symbolReport.str(); }
