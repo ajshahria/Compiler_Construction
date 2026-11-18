@@ -1,0 +1,15 @@
+int x = 10;
+int y = 0;
+bool flag = true;
+
+while (x > 0) {
+    y = y + x;
+    x = x - 1;
+}
+
+if (flag == true) {
+    print y;
+} else {
+    print x;
+}
+

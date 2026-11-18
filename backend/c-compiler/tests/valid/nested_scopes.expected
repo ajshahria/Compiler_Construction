@@ -1,0 +1,36 @@
+exit 0
+n = 7
+total = 0.0
+done = false
+L1:
+t1 = ! done
+t2 = n > 0
+t3 = t1 && t2
+ifFalse t3 goto L2
+t4 = n * n
+square = t4
+t5 = square % 2
+t6 = t5 == 0
+t7 = n == 1
+t8 = t6 || t7
+ifFalse t8 goto L3
+t9 = square / 2.0
+half = t9
+t10 = total + half
+total = t10
+goto L4
+L3:
+n@3 = 100
+print n@3
+L4:
+t11 = n - 1
+n = t11
+t12 = n <= 0
+ifFalse t12 goto L5
+done = true
+L5:
+goto L1
+L2:
+print total
+t13 = - n
+print t13

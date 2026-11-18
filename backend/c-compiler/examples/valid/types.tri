@@ -1,0 +1,7 @@
+int count = 3;
+float ratio = 2.5;
+bool ready = true;
+print count * 4;
+print ratio / 2.0;
+print !ready;
+
