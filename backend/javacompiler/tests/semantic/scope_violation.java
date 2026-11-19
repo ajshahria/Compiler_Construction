@@ -1,0 +1,4 @@
+{
+    int local = 3;
+}
+print local;

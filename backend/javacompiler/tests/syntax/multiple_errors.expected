@@ -1,0 +1,4 @@
+exit 1
+line 2: syntax error: unexpected ';'
+line 3: syntax error: unexpected ';'
+Compilation failed: 0 lexical error(s), 2 syntax error(s).
