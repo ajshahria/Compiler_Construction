@@ -45,6 +45,12 @@ NUM [0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?[fFdD]?
 "if"                       return IF;
 "else"                     return ELSE;
 "while"                    return WHILE;
+"for"                       return FOR;
+"do"                        return DO;
+"switch"                    return SWITCH;
+"case"                      return CASE;
+"default"                   return DEFAULT;
+"break"                     return BREAK;
 
 "true"                     return TRUE;
 "false"                    return FALSE;
@@ -57,6 +63,8 @@ NUM [0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?[fFdD]?
 ">="                       return GE;
 "&&"                       return AND;
 "||"                       return OR;
+"++"                       return INC;
+"--"                       return DEC;
 
 {NUM} {
     yylval.str = copyText(yytext);
@@ -68,7 +76,7 @@ NUM [0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?[fFdD]?
     return IDENT;
 }
 
-[{}()\[\];=+*/%<>!-] {
+[{}()\[\];:=+*/%<>!-] {
     return yytext[0];
 }
 

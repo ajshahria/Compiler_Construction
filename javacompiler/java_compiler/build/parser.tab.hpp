@@ -52,18 +52,26 @@
      IF = 269,
      ELSE = 270,
      WHILE = 271,
-     TRUE = 272,
-     FALSE = 273,
-     PRINT = 274,
-     EQ = 275,
-     NE = 276,
-     LE = 277,
-     GE = 278,
-     AND = 279,
-     OR = 280,
-     INVALID = 281,
-     UMINUS = 282,
-     LOWER_THAN_ELSE = 283
+     FOR = 272,
+     DO = 273,
+     SWITCH = 274,
+     CASE = 275,
+     DEFAULT = 276,
+     BREAK = 277,
+     TRUE = 278,
+     FALSE = 279,
+     PRINT = 280,
+     EQ = 281,
+     NE = 282,
+     LE = 283,
+     GE = 284,
+     AND = 285,
+     OR = 286,
+     INC = 287,
+     DEC = 288,
+     INVALID = 289,
+     UMINUS = 290,
+     LOWER_THAN_ELSE = 291
    };
 #endif
 
@@ -74,12 +82,12 @@ typedef union YYSTYPE
 {
 
 /* Line 1685 of yacc.c  */
-#line 12 "java_compiler/src/parser/parser.y"
+#line 13 "java_compiler/src/parser/parser.y"
  char* str; struct Node* node; 
 
 
 /* Line 1685 of yacc.c  */
-#line 83 "java_compiler/build/parser.tab.hpp"
+#line 91 "java_compiler/build/parser.tab.hpp"
 } YYSTYPE;
 # define YYSTYPE_IS_TRIVIAL 1
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */

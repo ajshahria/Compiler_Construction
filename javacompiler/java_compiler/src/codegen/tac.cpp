@@ -4,6 +4,7 @@
 #include <iostream>
 #include <ostream>
 #include <string>
+#include <vector>
 
 class TACGenerator {
 
@@ -12,6 +13,7 @@ private:
 
     int tempCount = 0;
     int labelCount = 0;
+    std::vector<std::string> breakLabels;
 
     // Generate temporary variable
     std::string newTemp() {
@@ -184,6 +186,11 @@ private:
             return;
         }
 
+        if (node->kind == "inc" || node->kind == "dec") {
+            out << node->text << " = " << node->text << (node->kind == "inc" ? " + 1\n" : " - 1\n");
+            return;
+        }
+
         // Print statement
         if (node->kind == "print") {
 
@@ -252,6 +259,63 @@ private:
             return;
         }
 
+        if (node->kind == "for") {
+            if(node->children[0]) generateStatement(node->children[0]);
+            std::string start=newLabel(), end=newLabel();
+            out<<start<<":\n";
+            if(node->children[1]){std::string c=generateExpression(node->children[1]);out<<"ifFalse "<<c<<" goto "<<end<<'\n';}
+            breakLabels.push_back(end);
+            generateStatement(node->children[3]);
+            breakLabels.pop_back();
+            if(node->children[2]) generateStatement(node->children[2]);
+            out<<"goto "<<start<<'\n'<<end<<":\n";
+            return;
+        }
+
+        if (node->kind == "do_while") {
+            std::string start=newLabel(), end=newLabel();
+            out<<start<<":\n";
+            breakLabels.push_back(end);
+            generateStatement(node->children[0]);
+            breakLabels.pop_back();
+            std::string c=generateExpression(node->children[1]);
+            out<<"if "<<c<<" goto "<<start<<'\n'<<end<<":\n";
+            return;
+        }
+
+        if (node->kind == "switch") {
+            std::string selector=generateExpression(node->children[0]);
+            Node* cases=node->children[1];
+            std::string end=newLabel(), defaultLabel=end;
+            std::vector<std::pair<Node*,std::string>> labels;
+            for(Node* item:cases->children){
+                if(item->kind=="default") defaultLabel=newLabel();
+                else labels.push_back({item,newLabel()});
+            }
+            for(const auto& entry:labels){
+                std::string value=generateExpression(entry.first->children[0]);
+                std::string test=newTemp();
+                out<<test<<" = "<<selector<<" == "<<value<<'\n';
+                out<<"if "<<test<<" goto "<<entry.second<<'\n';
+            }
+            out<<"goto "<<defaultLabel<<'\n';
+            breakLabels.push_back(end);
+            for(Node* item:cases->children){
+                if(item->kind=="case"){
+                    for(const auto& entry:labels) if(entry.first==item) out<<entry.second<<":\n";
+                    generateStatement(item->children[1]);
+                } else { out<<defaultLabel<<":\n"; generateStatement(item->children[0]); }
+            }
+            breakLabels.pop_back();
+            out<<end<<":\n";
+            return;
+        }
+
+        if (node->kind == "break") {
+            if(!breakLabels.empty()) out<<"goto "<<breakLabels.back()<<'\n';
+            return;
+        }
+
         std::cerr << "TAC warning: unsupported statement node: "
                   << node->kind << '\n';
     }
@@ -265,6 +329,7 @@ public:
 
         tempCount = 0;
         labelCount = 0;
+        breakLabels.clear();
 
         generateStatement(root);
     }

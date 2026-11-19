@@ -2,6 +2,7 @@
 #include "symbol_table/symbol_table.h"
 
 #include <iostream>
+#include <algorithm>
 #include <sstream>
 #include <string>
 
@@ -196,6 +197,14 @@ static void stmt(Node* n) {
         return;
     }
 
+    if (n->kind == "inc" || n->kind == "dec") {
+        Type t=symbols.lookup(n->text);
+        if(t==Type::Error){std::cerr<<"line "<<n->line<<": undeclared variable '"<<n->text<<"'\n";++errors;}
+        else if(!isNumeric(t)){std::cerr<<"line "<<n->line<<": increment/decrement requires numeric variable\n";++errors;}
+        else if(!symbols.isInitialized(n->text)){std::cerr<<"line "<<n->line<<": variable '"<<n->text<<"' might not have been initialized\n";++errors;}
+        return;
+    }
+
     if (n->kind == "if") {
         Type condition = expr(n->children.at(0));
         if (condition != Type::Error && condition != Type::Bool) {
@@ -238,6 +247,47 @@ static void stmt(Node* n) {
         symbols = before;
         return;
     }
+
+    if (n->kind == "for") {
+        symbols.enter();
+        if (n->children[0]) stmt(n->children[0]);
+        if (n->children[1]) {
+            Type condition=expr(n->children[1]);
+            if(condition!=Type::Error && condition!=Type::Bool){std::cerr<<"line "<<n->line<<": for condition must be boolean\n";++errors;}
+        }
+        SymbolTable before=symbols;
+        stmt(n->children[3]);
+        symbols=before;
+        if(n->children[2]) stmt(n->children[2]);
+        symbols.leave();
+        return;
+    }
+
+    if (n->kind == "do_while") {
+        stmt(n->children[0]);
+        Type condition=expr(n->children[1]);
+        if(condition!=Type::Error && condition!=Type::Bool){std::cerr<<"line "<<n->line<<": do-while condition must be boolean\n";++errors;}
+        return;
+    }
+
+    if (n->kind == "switch") {
+        Type selector=expr(n->children[0]);
+        std::vector<std::string> seen;
+        Node* cases=n->children[1];
+        for(Node* item:cases->children){
+            if(item->kind=="case"){
+                Type ct=expr(item->children[0]);
+                const std::string key=item->children[0]->text;
+                if(ct!=selector && !(isNumeric(ct)&&isNumeric(selector))){std::cerr<<"line "<<item->line<<": switch case type does not match selector\n";++errors;}
+                if(std::find(seen.begin(),seen.end(),key)!=seen.end()){std::cerr<<"line "<<item->line<<": duplicate switch case '"<<key<<"'\n";++errors;}
+                seen.push_back(key);
+            }
+            if(item->children.size()) stmt(item->children.back());
+        }
+        return;
+    }
+
+    if (n->kind == "break") return;
 
     if (n->kind == "print") {
         expr(n->children.at(0));

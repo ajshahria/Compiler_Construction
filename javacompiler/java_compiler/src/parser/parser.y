@@ -7,14 +7,15 @@ extern int yylex(); extern int yylineno;
 void yyerror(const char*);
 Node* syntaxRoot=nullptr;
 static Node* append(Node*a,Node*b){if(!a)a=makeNode("block","",yylineno);if(b)a->children.push_back(b);return a;}
+static Node* slots(const char*k,const char*t,int l,std::initializer_list<Node*> c){Node*n=makeNode(k,t,l);n->children.assign(c.begin(),c.end());return n;}
 %}
 %locations
 %union { char* str; struct Node* node; }
 %token <str> IDENT NUMBER
-%token CLASS PUBLIC STATIC VOID MAIN STRING INT FLOAT BOOLEAN IF ELSE WHILE TRUE FALSE PRINT
-%token EQ NE LE GE AND OR
+%token CLASS PUBLIC STATIC VOID MAIN STRING INT FLOAT BOOLEAN IF ELSE WHILE FOR DO SWITCH CASE DEFAULT BREAK TRUE FALSE PRINT
+%token EQ NE LE GE AND OR INC DEC
 %token INVALID
-%type <node> program block statements statement controlled_statement expression
+%type <node> program block statements statement controlled_statement expression for_init for_update maybe_expression switch_cases case_clause
 %left OR
 %left AND
 %left EQ NE
@@ -68,7 +69,27 @@ statement: controlled_statement { $$=$1; }
          makeNode("id",$2,@2.first_line),$4);
      free($2);
  }
+ | FOR '(' for_init ';' maybe_expression ';' for_update ')' controlled_statement { $$=slots("for","",@1.first_line,{$3,$5,$7,$9}); }
+ | DO controlled_statement WHILE '(' expression ')' ';' { $$=makeNode("do_while","",@1.first_line,$2,$5); }
+ | SWITCH '(' expression ')' '{' switch_cases '}' { $$=makeNode("switch","",@1.first_line,$3,$6); }
 ;
+
+for_init: { $$=nullptr; }
+ | IDENT '=' expression { $$=makeNode("assign",$1,@1.first_line,$3); free($1); }
+ | INT IDENT '=' expression { $$=makeNode("decl","int",@1.first_line,makeNode("id",$2,@2.first_line),$4); free($2); }
+ | FLOAT IDENT '=' expression { $$=makeNode("decl","float",@1.first_line,makeNode("id",$2,@2.first_line),$4); free($2); }
+ | BOOLEAN IDENT '=' expression { $$=makeNode("decl","boolean",@1.first_line,makeNode("id",$2,@2.first_line),$4); free($2); }
+;
+for_update: { $$=nullptr; }
+ | IDENT '=' expression { $$=makeNode("assign",$1,@1.first_line,$3); free($1); }
+ | IDENT INC { $$=makeNode("inc",$1,@1.first_line); free($1); }
+ | IDENT DEC { $$=makeNode("dec",$1,@1.first_line); free($1); };
+maybe_expression: { $$=nullptr; } | expression { $$=$1; };
+switch_cases: { $$=makeNode("cases","",@$.first_line); } | switch_cases case_clause { $$=append($1,$2); };
+case_clause: CASE NUMBER ':' statements { $$=makeNode("case","number",@1.first_line,makeNode("literal",$2,@2.first_line),$4); free($2); }
+ | CASE TRUE ':' statements { $$=makeNode("case","boolean",@1.first_line,makeNode("literal","true",@2.first_line),$4); }
+ | CASE FALSE ':' statements { $$=makeNode("case","boolean",@1.first_line,makeNode("literal","false",@2.first_line),$4); }
+ | DEFAULT ':' statements { $$=makeNode("default","",@1.first_line,$3); };
 
 controlled_statement: block { $$=$1; }
  | IDENT '=' expression ';' {
@@ -87,6 +108,7 @@ controlled_statement: block { $$=$1; }
  | WHILE '(' expression ')' controlled_statement {
      $$=makeNode("while","",@1.first_line,$3,$5);
  }
+ | BREAK ';' { $$=makeNode("break","",@1.first_line); }
 ;
 
 expression: NUMBER { $$=makeNode("literal",$1,@1.first_line); free($1); }
