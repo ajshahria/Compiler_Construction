@@ -1,0 +1,96 @@
+=== Headers ===
+Header              Line  Category      Role in this compiler
+------------------------------------------------------------------------
+<iostream>          1     I/O           enables cout / endl  - std::cout / std::cin streams
+=== Three Address Code ===
+    t1 = -10
+    t2 = (float) t1
+    c = t2
+    row = 0
+L1:
+    t3 = row < 4
+    ifFalse t3 goto L2
+    t4 = c * 9.0
+    t5 = t4 / 5.0
+    t6 = t5 + 32.0
+    f = t6
+    out c
+    outs "C = "
+    out f
+    outs "F"
+    outnl
+    t7 = c + 15.5
+    c = t7
+    t8 = row + 1
+    row = t8
+    goto L1
+L2:
+    steps = 0
+    n = 27
+L4:
+    t9 = n % 2
+    t10 = t9 == 0
+    ifFalse t10 goto L7
+    t11 = n / 2
+    n = t11
+    goto L8
+L7:
+    t12 = 3 * n
+    t13 = t12 + 1
+    n = t13
+L8:
+    t14 = steps + 1
+    steps = t14
+    t15 = n != 1
+    ifFalse t15 goto L5
+    goto L4
+L5:
+    outs "collatz steps: "
+    out steps
+    outnl
+    goto L9
+L9:
+=== Optimized TAC ===
+    c = -10.0
+    row = 0
+L1:
+    t3 = row < 4
+    ifFalse t3 goto L2
+    t4 = c * 9.0
+    t5 = t4 / 5.0
+    f = t5 + 32.0
+    out c
+    outs "C = "
+    out f
+    outs "F"
+    outnl
+    c = c + 15.5
+    row = row + 1
+    goto L1
+L2:
+    steps = 0
+    n = 27
+L4:
+    t9 = n % 2
+    t10 = t9 == 0
+    ifFalse t10 goto L7
+    n = n / 2
+    goto L8
+L7:
+    t12 = 3 * n
+    n = t12 + 1
+L8:
+    steps = steps + 1
+    t15 = n != 1
+    ifFalse t15 goto L5
+    goto L4
+L5:
+    outs "collatz steps: "
+    out steps
+    outnl
+=== Program Output ===
+-10C = 14F
+5.5C = 41.9F
+21C = 69.8F
+36.5C = 97.7F
+collatz steps: 111

@@ -1,0 +1,10 @@
+=== Headers ===
+Header              Line  Category      Role in this compiler
+------------------------------------------------------------------------
+<iostream>          2     I/O           enables cout / endl  - std::cout / std::cin streams
+=== Three Address Code ===
+    out 1
+=== Optimized TAC ===
+    out 1
+=== Program Output ===
+1

@@ -1,0 +1,3 @@
+Lexical error [line 3]: unterminated string literal
+Syntax error [line 4]: syntax error, unexpected KW_RETURN
+Compilation failed: 1 lexical and 1 syntax error(s).

@@ -1,0 +1,43 @@
+=== Headers ===
+Header              Line  Category      Role in this compiler
+------------------------------------------------------------------------
+<iostream>          2     I/O           enables cout / endl  - std::cout / std::cin streams
+=== Three Address Code ===
+    n = 3
+    f = 2.5
+    t1 = (float) n
+    t2 = f * t1
+    t3 = t2 + 1.0
+    g = t3
+    t4 = g > 8.0
+    big = t4
+    print g
+    print big
+    n_1 = 7
+    t5 = n_1 % 4
+    print t5
+    print n
+    t6 = -f
+    print t6
+    t7 = !big
+    t8 = t7 || false
+    print t8
+=== Optimized TAC ===
+    n = 3
+    f = 2.5
+    g = 8.5
+    big = true
+    print 8.5
+    print true
+    n_1 = 7
+    print 3
+    print 3
+    print -2.5
+    print false
+=== Program Output ===
+8.5
+true
+3
+3
+-2.5
+false

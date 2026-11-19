@@ -1,0 +1,2 @@
+Syntax error [line 7]: statement outside of main(): only variable declarations are allowed at the top level
+Compilation failed: 0 lexical and 1 syntax error(s).

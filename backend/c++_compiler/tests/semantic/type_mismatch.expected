@@ -1,0 +1,7 @@
+=== Headers ===
+Header              Line  Category      Role in this compiler
+------------------------------------------------------------------------
+<iostream>          2     I/O           enables cout / endl  - std::cout / std::cin streams
+Semantic error [line 3]: type mismatch: cannot initialize bool 'b' with a value of type float
+Semantic error [line 4]: type mismatch: cannot initialize int 'i' with a value of type float
+Compilation failed: 2 semantic error(s).

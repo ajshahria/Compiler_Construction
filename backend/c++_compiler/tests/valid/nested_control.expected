@@ -1,0 +1,65 @@
+=== Headers ===
+Header              Line  Category      Role in this compiler
+------------------------------------------------------------------------
+<iostream>          2     I/O           enables cout / endl  - std::cout / std::cin streams
+=== Three Address Code ===
+    i = 0
+    evens = 0
+L1:
+    t1 = i < 10
+    ifFalse t1 goto L2
+    t2 = i % 2
+    t3 = t2 == 0
+    ifFalse t3 goto L3
+    t4 = i > 4
+    ifFalse t4 goto L4
+    t5 = evens + 10
+    evens = t5
+    goto L5
+L4:
+    t6 = evens + 1
+    evens = t6
+L5:
+L3:
+    t7 = i + 1
+    i = t7
+    goto L1
+L2:
+    print evens
+    t8 = evens > 5
+    t9 = evens == 0
+    t10 = !t9
+    t11 = t8 && t10
+    t12 = t11 || false
+    ok = t12
+    print ok
+=== Optimized TAC ===
+    i = 0
+    evens = 0
+L1:
+    t1 = i < 10
+    ifFalse t1 goto L2
+    t2 = i % 2
+    t3 = t2 == 0
+    ifFalse t3 goto L3
+    t4 = i > 4
+    ifFalse t4 goto L4
+    evens = evens + 10
+    goto L5
+L4:
+    evens = evens + 1
+L5:
+L3:
+    i = i + 1
+    goto L1
+L2:
+    print evens
+    t8 = evens > 5
+    t9 = evens == 0
+    t10 = !t9
+    t11 = t8 && t10
+    ok = t11 || false
+    print ok
+=== Program Output ===
+23
+true

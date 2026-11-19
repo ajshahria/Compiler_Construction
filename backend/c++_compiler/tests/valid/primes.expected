@@ -1,0 +1,76 @@
+=== Headers ===
+Header              Line  Category      Role in this compiler
+------------------------------------------------------------------------
+<iostream>          1     I/O           enables cout / endl  - std::cout / std::cin streams
+=== Three Address Code ===
+    count = 0
+    num = 2
+L1:
+    t1 = num <= 50
+    ifFalse t1 goto L2
+    prime = true
+    d = 2
+L4:
+    t2 = d * d
+    t3 = t2 <= num
+    ifFalse t3 goto L5
+    t4 = num % d
+    t5 = t4 == 0
+    ifFalse t5 goto L7
+    prime = false
+    goto L5
+L7:
+    t6 = d + 1
+    d = t6
+    goto L4
+L5:
+    ifFalse prime goto L8
+    out num
+    outs " "
+    t7 = count + 1
+    count = t7
+L8:
+    t8 = num + 1
+    num = t8
+    goto L1
+L2:
+    outs "\nprimes: "
+    out count
+    outs "\n"
+    goto L9
+L9:
+=== Optimized TAC ===
+    count = 0
+    num = 2
+L1:
+    t1 = num <= 50
+    ifFalse t1 goto L2
+    prime = true
+    d = 2
+L4:
+    t2 = d * d
+    t3 = t2 <= num
+    ifFalse t3 goto L5
+    t4 = num % d
+    t5 = t4 == 0
+    ifFalse t5 goto L7
+    prime = false
+    goto L5
+L7:
+    d = d + 1
+    goto L4
+L5:
+    ifFalse prime goto L8
+    out num
+    outs " "
+    count = count + 1
+L8:
+    num = num + 1
+    goto L1
+L2:
+    outs "\nprimes: "
+    out count
+    outs "\n"
+=== Program Output ===
+2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 
+primes: 15

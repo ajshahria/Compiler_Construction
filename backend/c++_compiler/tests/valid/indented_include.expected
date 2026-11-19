@@ -1,0 +1,15 @@
+=== Headers ===
+Header              Line  Category      Role in this compiler
+------------------------------------------------------------------------
+<iostream>          1     I/O           enables cout / endl  - std::cout / std::cin streams
+<vector>            2     Containers    accepted (no effect)  - dynamic array
+=== Three Address Code ===
+    out 7
+    outnl
+    goto L1
+L1:
+=== Optimized TAC ===
+    out 7
+    outnl
+=== Program Output ===
+7

@@ -1,0 +1,8 @@
+=== Headers ===
+Header              Line  Category      Role in this compiler
+------------------------------------------------------------------------
+<iostream>          2     I/O           enables cout / endl  - std::cout / std::cin streams
+Semantic error [line 5]: invalid assignment: cannot assign bool to int variable 'x'
+Semantic error [line 6]: invalid assignment: cannot assign int to bool variable 'flag'
+Semantic error [line 8]: invalid assignment: cannot assign bool to int variable 'x'
+Compilation failed: 3 semantic error(s).

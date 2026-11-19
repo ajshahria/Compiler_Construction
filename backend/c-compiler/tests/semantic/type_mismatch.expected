@@ -1,0 +1,3 @@
+exit 1
+line 2: semantic error: type mismatch: cannot initialize bool variable 'b' with a float value
+Compilation failed: 1 semantic error(s).

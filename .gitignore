@@ -1,0 +1,10 @@
+# Build output and generated files
+build/
+*.o
+*.exe
+lex.yy.cpp
+parser.tab.cpp
+parser.tab.h
+parser.tab.hpp
+*.asm
+*.s

@@ -1,0 +1,3 @@
+exit 1
+line 4: semantic error: scope violation: 'local' (declared at line 2) is not visible outside its block
+Compilation failed: 1 semantic error(s).
