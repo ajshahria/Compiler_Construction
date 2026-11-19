@@ -1,0 +1,21 @@
+# Compiler build outputs
+java_compiler/build/minijavac
+java_compiler/build/minijavac.exe
+java_compiler/build/compiler_ui.exe
+java_compiler/build/*.o
+java_compiler/build/*.obj
+
+# Generated intermediate code
+output.tac
+
+# Temporary files created by the Windows compiler UI
+.compiler_ui_input.java
+.compiler_ui_output.txt
+
+# Common editor and operating system files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+__pycache__/
+*.py[cod]
