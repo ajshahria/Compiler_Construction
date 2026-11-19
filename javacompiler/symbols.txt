@@ -1,1 +1,3 @@
-choice : int (initialized)
+x : int (scope 1, initialized)
+y : int (scope 2, initialized)
+z : int (scope 3, initialized)

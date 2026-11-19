@@ -41,6 +41,18 @@ public:
         return Type::Error;
     }
 
+    int scopeDepth(const std::string& name) const {
+        for (std::size_t i=scopes.size(); i>0; --i)
+            if (scopes[i-1].find(name)!=scopes[i-1].end()) return static_cast<int>(i-1);
+        return -1;
+    }
+
+    bool isInitializedAtDepth(const std::string& name, int depth) const {
+        if(depth<0 || static_cast<std::size_t>(depth)>=scopes.size()) return false;
+        auto found=scopes[static_cast<std::size_t>(depth)].find(name);
+        return found!=scopes[static_cast<std::size_t>(depth)].end() && found->second.initialized;
+    }
+
     bool isInitialized(const std::string& name) const {
         for (auto it = scopes.rbegin(); it != scopes.rend(); ++it) {
             auto found = it->find(name);

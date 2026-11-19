@@ -7,8 +7,23 @@
 #include <string>
 
 static int errors = 0;
+static int breakableDepth = 0;
 static SymbolTable symbols;
 static std::ostringstream symbolReport;
+struct SymbolRecord { std::string name; Type type; int depth; bool initialized; };
+static std::vector<SymbolRecord> symbolRecords;
+
+static void refreshSymbolRecord(const std::string& name) {
+    int depth=symbols.scopeDepth(name);
+    for(auto it=symbolRecords.rbegin();it!=symbolRecords.rend();++it)
+        if(it->name==name && it->depth==depth){it->initialized=symbols.isInitializedAtDepth(name,depth);return;}
+}
+
+static void writeSymbolReport() {
+    symbolReport.str(""); symbolReport.clear();
+    for(const auto& r:symbolRecords)
+        symbolReport<<r.name<<" : "<<typeName(r.type)<<" (scope "<<r.depth<<", "<<(r.initialized?"initialized":"uninitialized")<<")\n";
+}
 
 static bool isNumeric(Type t) {
     return t == Type::Int || t == Type::Float;
@@ -159,7 +174,7 @@ static void stmt(Node* n) {
             ++errors;
             return;
         }
-        symbolReport << name << " : " << typeName(t) << (hasInitializer ? " (initialized)" : " (uninitialized)") << '\n';
+        symbolRecords.push_back(SymbolRecord{name,t,symbols.scopeDepth(name),false});
 
         if (hasInitializer) {
             Type initType = expr(n->children[1]);
@@ -169,6 +184,7 @@ static void stmt(Node* n) {
                 ++errors;
             } else if (initType != Type::Error) {
                 symbols.setInitialized(name);
+                refreshSymbolRecord(name);
             }
         }
         return;
@@ -193,6 +209,7 @@ static void stmt(Node* n) {
             ++errors;
         } else if (expressionType != Type::Error) {
             symbols.setInitialized(n->text);
+            refreshSymbolRecord(n->text);
         }
         return;
     }
@@ -229,6 +246,7 @@ static void stmt(Node* n) {
             symbols = before;
             symbols.mergeInitialization(before, thenState);
         }
+        for (const auto& record : symbolRecords) if(record.depth>=0) refreshSymbolRecord(record.name);
         return;
     }
 
@@ -243,7 +261,9 @@ static void stmt(Node* n) {
         // A while body can execute zero times, so its assignments cannot
         // establish definite initialization after the loop.
         SymbolTable before = symbols;
+        ++breakableDepth;
         stmt(n->children.at(1));
+        --breakableDepth;
         symbols = before;
         return;
     }
@@ -256,7 +276,9 @@ static void stmt(Node* n) {
             if(condition!=Type::Error && condition!=Type::Bool){std::cerr<<"line "<<n->line<<": for condition must be boolean\n";++errors;}
         }
         SymbolTable before=symbols;
+        ++breakableDepth;
         stmt(n->children[3]);
+        --breakableDepth;
         symbols=before;
         if(n->children[2]) stmt(n->children[2]);
         symbols.leave();
@@ -264,7 +286,9 @@ static void stmt(Node* n) {
     }
 
     if (n->kind == "do_while") {
+        ++breakableDepth;
         stmt(n->children[0]);
+        --breakableDepth;
         Type condition=expr(n->children[1]);
         if(condition!=Type::Error && condition!=Type::Bool){std::cerr<<"line "<<n->line<<": do-while condition must be boolean\n";++errors;}
         return;
@@ -272,8 +296,13 @@ static void stmt(Node* n) {
 
     if (n->kind == "switch") {
         Type selector=expr(n->children[0]);
+        if(selector!=Type::Error && !isNumeric(selector) && selector!=Type::Bool){
+            std::cerr<<"line "<<n->line<<": switch selector must be numeric or boolean\n";++errors;
+        }
         std::vector<std::string> seen;
+        bool hasDefault=false;
         Node* cases=n->children[1];
+        ++breakableDepth;
         for(Node* item:cases->children){
             if(item->kind=="case"){
                 Type ct=expr(item->children[0]);
@@ -281,13 +310,20 @@ static void stmt(Node* n) {
                 if(ct!=selector && !(isNumeric(ct)&&isNumeric(selector))){std::cerr<<"line "<<item->line<<": switch case type does not match selector\n";++errors;}
                 if(std::find(seen.begin(),seen.end(),key)!=seen.end()){std::cerr<<"line "<<item->line<<": duplicate switch case '"<<key<<"'\n";++errors;}
                 seen.push_back(key);
+            } else if(item->kind=="default") {
+                if(hasDefault){std::cerr<<"line "<<item->line<<": duplicate default label in switch\n";++errors;}
+                hasDefault=true;
             }
             if(item->children.size()) stmt(item->children.back());
         }
+        --breakableDepth;
         return;
     }
 
-    if (n->kind == "break") return;
+    if (n->kind == "break") {
+        if (breakableDepth==0) { std::cerr<<"line "<<n->line<<": break is only valid inside a loop or switch\n"; ++errors; }
+        return;
+    }
 
     if (n->kind == "print") {
         expr(n->children.at(0));
@@ -299,13 +335,16 @@ static void stmt(Node* n) {
 
 bool analyze(Node* root) {
     errors = 0;
+    breakableDepth = 0;
     symbols = SymbolTable{};
     symbolReport.str("");
     symbolReport.clear();
+    symbolRecords.clear();
 
     if (root) {
         for (Node* child : root->children) stmt(child);
     }
+    writeSymbolReport();
 
     if (errors > 0) {
         std::cerr << "\nSemantic analysis failed with " << errors

@@ -250,7 +250,9 @@ private:
             out << "ifFalse " << condition
                 << " goto " << endLabel << '\n';
 
+            breakLabels.push_back(endLabel);
             generateStatement(node->children[1]);
+            breakLabels.pop_back();
 
             out << "goto " << startLabel << '\n';
 
