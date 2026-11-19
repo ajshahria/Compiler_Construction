@@ -1,0 +1,3 @@
+exit 1
+line 2: semantic error: redeclaration of 'value' (already declared at line 1 in this scope)
+Compilation failed: 1 semantic error(s).

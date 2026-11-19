@@ -1,0 +1,9 @@
+exit 0
+i = 1
+L1:
+print i
+t1 = i + 1
+i = t1
+t2 = i <= 3
+if t2 goto L1
+L2:

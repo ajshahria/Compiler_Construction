@@ -1,0 +1,3 @@
+exit 1
+line 2: semantic error: type mismatch: while condition must be boolean, got int
+Compilation failed: 1 semantic error(s).

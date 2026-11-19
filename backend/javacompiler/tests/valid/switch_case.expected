@@ -1,0 +1,16 @@
+exit 0
+value = 2
+t1 = value == 1
+if t1 goto L2
+t2 = value == 2
+if t2 goto L3
+goto L4
+L2:
+print 10
+goto L1
+L3:
+print 20
+goto L1
+L4:
+print 0
+L1:

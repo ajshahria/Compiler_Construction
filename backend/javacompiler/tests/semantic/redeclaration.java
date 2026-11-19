@@ -1,0 +1,2 @@
+int value = 4;
+bool value = true;

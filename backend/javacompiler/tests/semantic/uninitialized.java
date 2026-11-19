@@ -1,0 +1,2 @@
+int total;
+print total;
