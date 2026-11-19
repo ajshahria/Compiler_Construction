@@ -152,11 +152,11 @@ python ui/compiler_ui.py               # GUI: editor + one tab per phase
 | 6 Code generation | `src/codegen/codegen.*`, `src/codegen/assembly.*`, `src/interpreter/interpreter.*` |
 | Driver / errors | `src/main.cpp`, `src/common/` |
 
-Formal grammar: [`backend/c++_compiler/docs/grammar.md`](backend/c++_compiler/docs/grammar.md). Test programs: `backend/c++_compiler/tests/{valid,lexical,syntax,semantic}`. Full guide: [`README_CPP.md`](backend/c++_compiler/README_CPP.md).
+Formal grammar: [`backend/c++_compiler/docs/grammar.md`](backend/c++_compiler/docs/grammar.md). Test programs: `backend/c++_compiler/tests/{valid,lexical,syntax,semantic}`. Full guide: [`README.md`](backend/c++_compiler/README.md).
 
 ## C++ extras (bonus)
 
-`int main()`, `cout << "text" << x << endl;`, `cin >>`, `for`, `do-while`, `switch`, `break`/`continue`, `?:`, `x++`, `+=` and more — see `README_CPP.md` for the full list.
+`int main()`, `cout << "text" << x << endl;`, `cin >>`, `for`, `do-while`, `switch`, `break`/`continue`, `?:`, `x++`, `+=` and more — see [`docs/grammar.md`](backend/c++_compiler/docs/grammar.md) for the full list.
 
 ## Header files (`#include`)
 
