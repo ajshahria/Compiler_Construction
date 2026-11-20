@@ -1,221 +1,343 @@
-# Compiler Construction Project
+# Tricora: a Mini Language Compiler with Flex and Bison
 
-This repository is a university course project for Compiler Construction. The goal of this project is to build a simple compiler system capable of compiling C, C++, and Java programs through the main phases of a compiler: lexical analysis, syntax analysis, semantic analysis, intermediate code generation, optimization, and code generation.
+Compiler Construction Lab project, Department of Computer Science and Engineering, Metropolitan University, Bangladesh.
 
-> **Required language.** All three compilers implement the fixed mini language of the lab manual (section 5: `int`/`float`/`bool`, `if`/`else`, `while`, `print`, nested blocks). A program written exactly as in the manual, for example its sample program in section 5.5, compiles to Three Address Code with each of them **with no flags**:
->
-> ```bash
-> backend/c-compiler/build/tricora     program.txt
-> backend/c++_compiler/build/compiler.exe program.txt
-> backend/javacompiler/build/minijavac program.txt
-> ```
->
-> The C, C++ and Java syntax each compiler also accepts (`int main()`, `cout`, `class Main`, `System.out.println`, ...) is an extension on top of that language. `--strict` makes the C++ and Java compilers require their full C++ or Java program form.
-
-## Project Overview
-
-A compiler translates source code written in a high-level programming language into executable or intermediate code. In this project, we aim to understand how compilers work by implementing a simplified version for three widely used languages: C, C++, and Java.
-
-The main objectives of this project are to:
-
-- Understand the compilation process
-- Implement lexical and syntactic analysis for multiple languages
-- Build semantic checks and symbol tables
-- Generate intermediate code for compiled programs
-- Develop a simple user interface for compiler interaction
-- Apply compiler design concepts in a practical university project
-
-## Core Compiler Phases
-
-### 1. Lexical Analysis
-The lexer reads source code and converts it into tokens such as keywords, identifiers, numbers, operators, and symbols.
-
-### 2. Syntax Analysis
-The parser verifies whether the token sequence follows the grammar of the language and generates a parse tree or abstract syntax tree (AST).
-
-### 3. Semantic Analysis
-This phase checks variable declarations, type compatibility, scope rules, and other language constraints.
-
-### 4. Intermediate Code Generation
-The compiler converts the AST into an intermediate representation (IR) to simplify further processing.
-
-### 5. Optimization
-The optimization phase reduces redundant operations and improves the efficiency of the generated code.
-
-### 6. Code Generation
-The final phase produces target code that can be executed or translated into machine-level instructions.
-
-## Project Scope
-
-This project focuses on creating a simple compiler environment that supports:
-
-- C language compiler
-- C++ language compiler
-- Java language compiler
-- A user interface for input and result display
-
-The system will support basic compilation tasks and demonstrate the core working principles of compiler construction.
-
-## Team Members and Responsibilities
-
-- Abdul Julil Shahria - Responsible for the C++ language compiler and UI
-- Saima Suchi - Responsible for the Java language compiler
-- Sabika Rahman - Responsible for the C language compiler
-
-## Suggested Development Workflow
-
-1. Define the language grammar
-2. Implement the lexer
-3. Build the parser
-4. Create the AST
-5. Add semantic analysis
-6. Generate intermediate code
-7. Run tests and fix errors
-8. Optimize and finalize code generation
-
-## Getting Started
-
-### Prerequisites
-
-- A modern C++/Java/Python environment, depending on the implementation language
-- A compiler or interpreter for the selected language
-- A build tool such as CMake, Make, or Gradle
-
-### Example
-
-```bash
-git clone https://github.com/yourusername/compiler-construction-project.git
-cd compiler-construction-project
-# build the project
-# run the compiler on an input program
-```
-
-## Web UI (Compiler Explorer style)
-
-One browser UI for all three compilers: a source editor on the left with a **C / C++ / Java** toggle, and the compiler output on the right with one tab per phase (Headers, Tokens, AST, Symbol Table, TAC, Optimized TAC, Assembly, Output, Errors). Tabs a compiler does not produce are greyed out; errors are listed in the Errors tab and underlined in the editor.
+Tricora is a compiler front-end with intermediate code generation for the fixed mini language defined in section 5 of the lab project manual (`int`, `float`, `bool`, `if`/`else`, `while`, `print`, nested blocks). It runs every required phase of the manual:
 
 ```text
-frontend/   Vite + React + Monaco editor
-server/     FastAPI; runs the .exe files in backend/*/build/ once per phase
+source program
+   │
+   ▼
+Lexical analyzer (Flex)  ──►  tokens               lexical errors with line numbers
+   │
+   ▼
+Syntax analyzer (Bison)  ──►  Abstract Syntax Tree  syntax errors, error recovery
+   │
+   ▼
+Semantic analyzer + Symbol Table (nested scopes)    undeclared, redeclared, scope, type errors
+   │
+   ▼
+Intermediate code generator  ──►  Three Address Code (TAC): the required final output
 ```
 
-1. Build the compilers: run `make` in `backend/c-compiler`, `backend/c++_compiler` and `backend/javacompiler`.
-2. Start the server:
+Each team member built one compiler for this same language. All three share the same pipeline. Each one also accepts the language in a different surface style (plain C, C++ or Java), which is how the project goes beyond the fixed specification:
 
-   ```sh
-   cd server
-   python -m venv .venv
-   .venv/Scripts/python -m pip install -r requirements.txt     # Linux/macOS: .venv/bin/python
-   .venv/Scripts/python -m uvicorn main:app --port 8000
-   ```
+| Compiler | Folder | Executable | Written in | Extra surface syntax (bonus) |
+|---|---|---|---|---|
+| **tricora** (C) | [`backend/c-compiler`](backend/c-compiler) | `build/tricora` | C | the manual's language only |
+| **compiler** (C++) | [`backend/c++_compiler`](backend/c++_compiler) | `build/compiler.exe` | C++ | `#include`, `int main()`, `cout`, `cin`, `for`, `do-while`, `switch`, `?:`, `++`, `+=` |
+| **minijavac** (Java) | [`backend/javacompiler`](backend/javacompiler) | `build/minijavac` | C++ | `class` with `main`, `System.out.println`, `boolean`, `for`, `do-while`, `switch`, `++` |
 
-3. Start the frontend in a second terminal, then open http://localhost:5173:
+A program written exactly as in the manual compiles with **all three compilers, with no flags**.
 
-   ```sh
-   cd frontend
-   npm install
-   npm run dev
-   ```
+## Team members
 
-`npm run build` writes `frontend/dist/`; when that folder exists the server also serves the UI itself at http://localhost:8000, so only step 2 is needed.
+| Member | Responsibility |
+|---|---|
+| Abdul Julil Shahria | C++ compiler (`backend/c++_compiler`), web user interface (`frontend`, `server`) |
+| Saima Suchi | Java compiler (`backend/javacompiler`) |
+| Sabika Rahman | C compiler (`backend/c-compiler`) |
 
-### Deploy with Docker (Render)
+## Features
 
-The `Dockerfile` builds everything from source in three stages: the React UI, the three compilers (linked statically, then every test suite is run, so a failing test stops the deploy), and a slim Python image that runs the server as an unprivileged user. Run it locally with Docker:
+### Required modules (manual section 4)
+
+| Module | What it does | Files (in each compiler) |
+|---|---|---|
+| Lexical analyzer | Keywords, identifiers, integer/float/boolean constants, all operators and delimiters. Discards `//` and `/* */` comments and whitespace. Reports an invalid token with its line number. | `src/lexer/lexer.l` |
+| Syntax analyzer | Unambiguous CFG implemented in Bison, with precedence and associativity declarations and no conflicts. Syntax errors carry line numbers. The `error` token is used for recovery, so several errors are reported in one run. | `src/parser/parser.y` |
+| Abstract Syntax Tree | One node per construct (declaration, assignment, binary/unary operation, if, while, print, block). Printed as an indented tree with `--ast`. | `src/ast/` |
+| Symbol table | Name, type, scope and declaration line of every identifier. A stack of scopes, so a variable declared inside a block is not visible outside it. Printed with `--symtab`. | `src/symbol_table/` |
+| Semantic analyzer | Undeclared variable, redeclaration in the same scope, scope violation, type mismatch, invalid assignment, invalid expression (for example `&&` on numbers). | `src/semantic/` |
+| Intermediate code | Three Address Code with temporaries `t1, t2, …` and labels `L1, L2, …`. Covers arithmetic with operator precedence, relational and logical expressions, `if`, `if-else`, `while` (with `ifFalse … goto` and `goto`) and `print`. | C: `src/codegen/`, C++: `src/tac/`, Java: `src/codegen/` |
+
+### Bonus features (manual section 14)
+
+- **Language extensions** (C++ and Java compilers): `for`, `do-while`, `switch-case`, `break`/`continue`, unary and increment/decrement operators.
+- **Optimization** (`--opt`): constant propagation and constant folding, dead code and unreachable code elimination, removal of unused temporaries.
+- **Graphical user interface**: a browser IDE with a source editor and one output tab per phase (see [Web user interface](#web-user-interface)).
+- **Improved error recovery**: errors from several statements are reported in one run.
+- Beyond the manual's scope, and not graded: TAC interpreter (`--run`) and x86 assembly output (`--asm`).
+
+## Language summary
+
+The authoritative description is section 5 of the manual. The full formal CFG of each compiler is in its grammar file:
+- [C grammar](backend/c-compiler/docs/grammar.md)
+- [C++ grammar](backend/c++_compiler/docs/grammar.md)
+- [Java grammar](backend/javacompiler/docs/language-grammar.md)
+
+| Element | Supported |
+|---|---|
+| Types | `int`, `float`, `bool` |
+| Statements | declaration `int x;`, assignment `x = 5;`, `if`, `if-else`, `while`, `print x;`, nested blocks `{ … }` |
+| Arithmetic operators | `+ - * / %` |
+| Relational operators | `< > <= >= == !=` |
+| Logical operators | `&& \|\| !` |
+| Literals | `42`, `3.14`, `true`, `false` |
+| Identifiers | a letter or `_`, then letters, digits or `_` |
+| Comments | `// line` and `/* block */` |
+
+## Directory structure
+
+```text
+Compiler_Construction/
+├── readme.md                     this file
+├── Dockerfile                    builds the compilers and the web UI, runs every test suite
+├── render.yaml                   one-click deployment of the Dockerfile on Render
+│
+├── backend/                      the three compilers; each one is self-contained
+│   ├── c-compiler/               C compiler "tricora" (Sabika Rahman)
+│   │   ├── Makefile              make, make test, make clean
+│   │   ├── README.md             build, run and option reference
+│   │   ├── docs/
+│   │   │   ├── grammar.md        formal CFG, precedence table, lexical rules
+│   │   │   └── PROJECT_REPORT.md project report
+│   │   ├── src/
+│   │   │   ├── main.c            driver: runs the phases in order
+│   │   │   ├── lexer/            lexer.l (Flex)
+│   │   │   ├── parser/           parser.y (Bison), builds the AST
+│   │   │   ├── ast/              AST nodes and printer
+│   │   │   ├── symbol_table/     scope stack: insert, lookup, enter/exit scope
+│   │   │   ├── semantic/         type and scope checking
+│   │   │   ├── codegen/          Three Address Code generation
+│   │   │   └── backend/          bonus: optimizer, interpreter, x86 assembly
+│   │   ├── examples/             valid/ and invalid/ sample programs (.tri)
+│   │   └── tests/                valid/, lexical/, syntax/, semantic/ + run_tests.sh
+│   │
+│   ├── c++_compiler/             C++ compiler "compiler" (Abdul Julil Shahria)
+│   │   ├── Makefile
+│   │   ├── README.md
+│   │   ├── docs/grammar.md
+│   │   ├── src/
+│   │   │   ├── main.cpp          driver
+│   │   │   ├── lexer/            lexer.l (Flex)
+│   │   │   ├── parser/           parser.y (Bison)
+│   │   │   ├── preprocessor/     #include handling
+│   │   │   ├── ast/
+│   │   │   ├── symbol_table/
+│   │   │   ├── semantic/
+│   │   │   ├── tac/              Three Address Code generation
+│   │   │   ├── optimizer/        bonus: TAC optimizer
+│   │   │   ├── codegen/          bonus: x86 assembly
+│   │   │   ├── interpreter/      bonus: TAC interpreter
+│   │   │   └── common/           shared types and error reporting
+│   │   ├── examples/             sample programs (.cpp)
+│   │   └── tests/                valid/, lexical/, syntax/, semantic/ + run_tests.sh
+│   │
+│   └── javacompiler/             Java compiler "minijavac" (Saima Suchi)
+│       ├── Makefile
+│       ├── README.md
+│       ├── docs/
+│       │   ├── language-grammar.md
+│       │   └── project-report.md
+│       ├── src/
+│       │   ├── main.cpp          driver
+│       │   ├── lexer/  parser/  ast/  symbol_table/  semantic/
+│       │   ├── codegen/          Three Address Code generation
+│       │   ├── backend/          bonus: optimizer, interpreter, x86 assembly
+│       │   └── common/           shared types and error counters
+│       ├── examples/             Example.java
+│       └── tests/                valid/, lexical/, syntax/, semantic/ + run_tests.sh
+│
+├── server/                       web UI back end (FastAPI): runs a compiler once per phase
+│   ├── main.py                   HTTP API
+│   ├── compilers.py              which compilers, phases and options the UI offers
+│   └── requirements.txt
+│
+└── frontend/                     web UI front end (React + Vite + Monaco editor)
+    ├── src/                      App.tsx, EditorPane.tsx, OutputPane.tsx, api.ts, …
+    └── public/                   logo and icons
+```
+
+Each compiler folder follows the layout suggested in section 8 of the manual:
+- `src/` is split by compiler phase.
+- `docs/` holds the grammar and the report.
+- `examples/` holds sample programs.
+- `tests/` holds valid and invalid programs, each with its expected output.
+- `Makefile` builds it with one `make`.
+
+The generated files (`lex.yy.c`, `parser.tab.c`, the executables) go to each compiler's `build/` folder. That folder is listed in `.gitignore` and is not committed.
+
+## Requirements
+
+| Tool | Used for | Tested with |
+|---|---|---|
+| GCC / G++ | compiling the C and C++ sources (C++11 for the C++ compiler, C++17 for the Java compiler) | MinGW GCC 6.3, GCC on Ubuntu |
+| Flex | lexer generator | 2.5.35 |
+| Bison | parser generator (2.4 or newer) | 2.4.2 |
+| GNU Make | build automation | |
+| Python 3 and Node.js | only for the optional web user interface | |
+
+On Ubuntu/Debian: `sudo apt install build-essential flex bison`. On Windows, use MinGW/MSYS or MSYS2 and run the commands from its shell (or Git Bash).
+
+## Compilation instructions
+
+Each compiler builds with a single `make` in its own folder:
+
+```sh
+git clone https://github.com/ajshahria/Compiler_Construction.git
+cd Compiler_Construction
+
+make -C backend/c-compiler        # -> backend/c-compiler/build/tricora
+make -C backend/c++_compiler      # -> backend/c++_compiler/build/compiler.exe
+make -C backend/javacompiler      # -> backend/javacompiler/build/minijavac
+```
+
+On Windows, the C and Java executables get a `.exe` suffix (`tricora.exe`, `minijavac.exe`). `make clean` in a folder removes its `build/` directory.
+
+## Execution instructions
+
+Run a compiler on a source file. The default output is the Three Address Code:
+
+```sh
+backend/c-compiler/build/tricora         program.txt
+backend/c++_compiler/build/compiler.exe  program.txt
+backend/javacompiler/build/minijavac     program.txt
+```
+
+Each phase can be shown on its own. These options work in all three compilers:
+
+| Option | Shows |
+|---|---|
+| `--tokens` | token stream (lexical analysis) |
+| `--ast` | Abstract Syntax Tree, indented |
+| `--symtab` | symbol table: name, type, scope, line declared |
+| `--tac` | Three Address Code (the default) |
+| `--opt` | optimized TAC (bonus) |
+| `--run` | runs the TAC and prints the program's output (bonus) |
+| `--asm` | x86 assembly (bonus) |
+| `--all` | every phase above |
+| `-o file` | write the output to a file (C++ compiler: writes the assembly) |
+
+C++ and Java only: `--strict` requires the full C++ form (`#include <iostream>` and `int main()`) or Java form (`class Name { public static void main(String[] args) { … } }`) instead of the manual's plain statement list. The README in each compiler folder lists the rest of its options.
+
+### Example: valid program
+
+The sample program of manual section 5.5:
+
+```c
+int x;
+int y;
+bool flag;
+
+x = 10;
+y = 0;
+flag = true;
+
+while (x > 0) {
+   y = y + x;
+   x = x - 1;
+}
+
+if (flag == true) {
+   print y;
+} else {
+   print x;
+}
+```
+
+`backend/c-compiler/build/tricora sample.txt` prints:
+
+```text
+x = 10
+y = 0
+flag = true
+L1:
+t1 = x > 0
+ifFalse t1 goto L2
+t2 = y + x
+y = t2
+t3 = x - 1
+x = t3
+goto L1
+L2:
+t4 = flag == true
+ifFalse t4 goto L3
+print y
+goto L4
+L3:
+print x
+L4:
+```
+
+### Example: invalid program
+
+```c
+int x;
+bool b;
+b = 5 + 3.2;
+print y;
+```
+
+```text
+line 3: semantic error: invalid assignment: cannot assign a float value to bool variable 'b'
+line 4: semantic error: undeclared variable 'y'
+Compilation failed: 2 semantic error(s).
+```
+
+The exit status is `0` when the program compiles and `1` when it has errors.
+
+## Testing
+
+Every compiler has a `tests/` folder with the four categories required by section 15 of the manual. Each test program `name.<ext>` is paired with `name.expected`, which holds the exact expected output.
+
+| Category | C | C++ | Java | Demonstrates |
+|---|---|---|---|---|
+| `valid/` | 10 | 23 | 15 | programs that compile cleanly through to TAC, including the manual's sample (5.5) and TAC example (4.6) |
+| `lexical/` | 3 | 7 | 3 | invalid characters, invalid identifiers, unterminated comments |
+| `syntax/` | 3 | 9 | 4 | missing semicolons, unbalanced braces, several errors in one file |
+| `semantic/` | 8 | 9 | 9 | undeclared, redeclaration, scope violation, type mismatch, invalid assignment, invalid expression |
+
+Run them all:
+
+```sh
+make -C backend/c-compiler test
+make -C backend/c++_compiler test
+make -C backend/javacompiler test
+```
+
+Current result: C 24/24, C++ 48/48, Java 31/31 passing.
+
+## Web user interface
+
+A browser IDE for all three compilers (bonus: GUI):
+- **Left:** a source editor with a **C / C++ / Java** switch, Open and Save buttons, and a Compile button (or Ctrl+Enter).
+- **Right:** one tab per phase: Tokens, AST, Symbol Table, TAC, Optimized TAC, Assembly, Output and Errors. Errors are also underlined in the editor.
+
+Build the compilers first (see above), then:
+
+```sh
+# terminal 1: API server on http://localhost:8000
+cd server
+python -m venv .venv
+.venv/Scripts/python -m pip install -r requirements.txt     # Linux/macOS: .venv/bin/python
+.venv/Scripts/python -m uvicorn main:app --port 8000
+
+# terminal 2: editor UI on http://localhost:5173
+cd frontend
+npm install
+npm run dev
+```
+
+After `npm run build` (which writes `frontend/dist/`), the server also serves the UI itself at http://localhost:8000, so only terminal 1 is needed.
+
+With Docker, one command builds the compilers and the UI and runs all test suites:
 
 ```sh
 docker build -t tricora .
-docker run -p 8000:8000 tricora        # then open http://localhost:8000
+docker run -p 8000:8000 tricora          # then open http://localhost:8000
 ```
 
-To put it online for free on [Render](https://render.com): sign in with GitHub, choose **New -> Blueprint**, and pick this repository. `render.yaml` creates one free web service that builds the `Dockerfile` from the `main` branch and redeploys on every push. The free plan sleeps after about 15 minutes without visitors, so the first visit after that takes 30-60 seconds.
+On [Render](https://render.com), **New → Blueprint** with this repository uses `render.yaml` to deploy the same image.
 
-API: `GET /api/languages` (each language's tabs, options and starter program), `POST /api/compile` with `{language, source, options, stdin}`.
+## Documentation
 
-## Example Compilation Workflow
-
-```text
-source code -> lexer -> parser -> AST -> semantic analysis -> IR -> optimization -> code generation -> target code
-```
-
-## Learning Goals
-
-This project helps build practical knowledge in:
-
-- Formal languages and grammar
-- Tokenization and parsing
-- AST design
-- Symbol tables
-- Type checking and scope resolution
-- Code generation concepts
-- Compiler error handling
-- Multi-language compiler design
-
-## Contribution
-
-This project is developed as part of the Compiler Construction course. Team members can continue improving the lexer, parser, semantic analyzer, and compiler interface as the project expands.
+| Document | Location |
+|---|---|
+| Formal grammars | [C](backend/c-compiler/docs/grammar.md), [C++](backend/c++_compiler/docs/grammar.md), [Java](backend/javacompiler/docs/language-grammar.md) |
+| Project reports | [C](backend/c-compiler/docs/PROJECT_REPORT.md), [Java](backend/javacompiler/docs/project-report.md) |
+| Per-compiler guides | [C](backend/c-compiler/README.md), [C++](backend/c++_compiler/README.md), [Java](backend/javacompiler/README.md) |
 
 ## License
 
-This project is intended for educational and university coursework purposes.
-
-## Notes
-
-This repository is planned as a simple but functional compiler construction project for academic learning and demonstration.
-
----
-
-# Tricora Compiler - C++ version (branch `c++_compiler`)
-
-A Flex/Bison compiler written in C++ for the fixed mini language of the lab manual
-(`int`/`float`/`bool`, `if`/`else`, `while`, `print`, nested scopes) plus C++-style extras.
-It implements all six phases; the web UI above shows each one in its own tab.
-
-## Build and run
-
-```bash
-cd backend/c++_compiler                # all C++ compiler files live here
-make                                   # builds build/compiler.exe (needs g++, flex, bison)
-build/compiler.exe examples/headers_demo.cpp # prints TAC (default)
-build/compiler.exe --all tests/valid/manual_sample_no_header.cpp   # the manual's language: no flags needed
-make test                              # runs every program in tests/ against its .expected file
-```
-
-| Flag | Output |
-|---|---|
-| `--tokens` | token stream (phase 1, lexical) |
-| `--ast` | indented AST (phase 2, syntax) |
-| `--symtab` | symbol table: name, type, scope id, line (phase 3, semantic) |
-| `--tac` | three address code (phase 4) — default |
-| `--opt` | optimized TAC (phase 5) |
-| `--asm` / `-o f.s` | 32-bit x86 AT&T assembly (phase 6); build with `gcc f.s -o f.exe` (MinGW) |
-| `--run` | executes the program with the TAC interpreter |
-
-## Phases and files
-
-| Phase | Files |
-|---|---|
-| 1 Lexical analysis | `src/lexer/lexer.l` |
-| 2 Syntax analysis + AST | `src/parser/parser.y`, `src/ast/ast.h`, `src/ast/ast.cpp` |
-| 3 Semantic analysis | `src/semantic/semantic.*`, `src/symbol_table/symbol_table.*` |
-| 4 Intermediate code (TAC) | `src/tac/tac.*` |
-| 5 Optimization (folding, propagation, dead code) | `src/optimizer/optimizer.*` |
-| 6 Code generation | `src/codegen/codegen.*`, `src/codegen/assembly.*`, `src/interpreter/interpreter.*` |
-| Driver / errors | `src/main.cpp`, `src/common/` |
-
-Formal grammar: [`backend/c++_compiler/docs/grammar.md`](backend/c++_compiler/docs/grammar.md). Test programs: `backend/c++_compiler/tests/{valid,lexical,syntax,semantic}`. Full guide: [`README.md`](backend/c++_compiler/README.md).
-
-## C++ extras (bonus)
-
-`int main()`, `cout << "text" << x << endl;`, `cin >>`, `for`, `do-while`, `switch`, `break`/`continue`, `?:`, `x++`, `+=` and more — see [`docs/grammar.md`](backend/c++_compiler/docs/grammar.md) for the full list.
-
-## Header files (`#include`)
-
-The lexer recognises `#include <header>` lines and `using namespace std;` (`src/preprocessor/headers.*`).
-All C++ standard headers (`<iostream>`, `<vector>`, `<cmath>`, `<cstdlib>`, ... up to C++23, plus `<stdio.h>`-style C headers
-and `<bits/stdc++.h>`) are accepted and listed with `--headers`. Rules:
-
-- A file with no `#include` and no `main` is the lab manual's language (section 5.5) and compiles with no flags. Every other program must start with `#include <iostream>` (error `missing required header` otherwise), and `#include` lines must be at the top of the file. `--allow-no-header` relaxes the first rule. Such a program must also define `int main()` (error otherwise); `--manual` relaxes both rules, and `--strict` enforces both even for a manual-style file.
-- `cout << x << endl;` (or `std::cout`) needs `<iostream>`.
-- An unknown header (`<notaheader>`) or a quoted user header (`"file.h"`) is a lexical error with its line number.
-- Other headers are accepted but have no effect, because the language has no library calls yet.
+Coursework for the Compiler Construction Lab. Intended for educational use only.
