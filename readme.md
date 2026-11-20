@@ -80,6 +80,37 @@ cd compiler-construction-project
 # run the compiler on an input program
 ```
 
+## Web UI (Compiler Explorer style)
+
+One browser UI for all three compilers: a source editor on the left with a **C / C++ / Java** toggle, and the compiler output on the right with one tab per phase (Headers, Tokens, AST, Symbol Table, TAC, Optimized TAC, Assembly, Output, Errors). Tabs a compiler does not produce are greyed out; errors are listed in the Errors tab and underlined in the editor.
+
+```text
+frontend/   Vite + React + Monaco editor
+server/     FastAPI; runs the .exe files in backend/*/build/ once per phase
+```
+
+1. Build the compilers: run `make` in `backend/c-compiler`, `backend/c++_compiler` and `backend/javacompiler`.
+2. Start the server:
+
+   ```sh
+   cd server
+   python -m venv .venv
+   .venv/Scripts/python -m pip install -r requirements.txt     # Linux/macOS: .venv/bin/python
+   .venv/Scripts/python -m uvicorn main:app --port 8000
+   ```
+
+3. Start the frontend in a second terminal, then open http://localhost:5173:
+
+   ```sh
+   cd frontend
+   npm install
+   npm run dev
+   ```
+
+`npm run build` writes `frontend/dist/`; when that folder exists the server also serves the UI itself at http://localhost:8000, so only step 2 is needed.
+
+API: `GET /api/languages`, `GET /api/examples/{lang}`, `GET /api/examples/{lang}/file?path=...`, `POST /api/compile` with `{language, source, options, stdin}`.
+
 ## Example Compilation Workflow
 
 ```text

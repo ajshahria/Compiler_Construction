@@ -36,3 +36,9 @@ __pycache__/
 Thumbs.db
 *.swp
 *.swo
+
+# ----- web UI (frontend/ and server/) -----
+node_modules/
+frontend/dist/
+*.tsbuildinfo
+.venv/
