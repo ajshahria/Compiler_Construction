@@ -69,7 +69,8 @@ export default function App() {
 
   const language = meta?.languages.find((l) => l.id === lang) ?? meta?.languages[0];
   const source = language ? sources[language.id] : undefined;
-  const langOptions = language ? options[language.id] ?? [] : [];
+  // Drop saved options the server no longer offers (e.g. an old "--manual" in localStorage).
+  const langOptions = language ? (options[language.id] ?? []).filter((o) => language.options.includes(o)) : [];
   const fileName = language ? fileNames[language.id] ?? `source${language.extension}` : "";
 
   useEffect(() => {
