@@ -1,4 +1,4 @@
 exit 1
 line 4: lexical error: unterminated block comment
-line 8: syntax error: unexpected $end
+line 8: syntax error: unexpected end of file
 Compilation failed: 1 lexical error(s), 1 syntax error(s).

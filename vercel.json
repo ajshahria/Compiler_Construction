@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm --prefix frontend ci && npm --prefix frontend run build",
+  "functions": {
+    "app.py": {
+      "includeFiles": "{frontend/dist/**,server/*.py,server/bin/linux/**,backend/*/examples/**,backend/*/tests/**}",
+      "maxDuration": 60
+    }
+  }
+}

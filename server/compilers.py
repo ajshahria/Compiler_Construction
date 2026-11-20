@@ -1,10 +1,47 @@
 """Table of the three compilers in backend/ and how to call them."""
 
+import os
+import shutil
+import tempfile
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 BACKEND = ROOT / "backend"
+# Static Linux builds made by scripts/build-linux-binaries.sh, used on Vercel.
+LINUX_BIN = ROOT / "server" / "bin" / "linux"
+
+
+def find_exe(folder: Path, windows_name: str, linux_name: str) -> Path:
+    """The compiler binary for this OS: build/<name>.exe on Windows; on Linux
+    the prebuilt static binary if present, else the compiler's own build/."""
+    if os.name == "nt":
+        return folder / "build" / windows_name
+    prebuilt = LINUX_BIN / linux_name
+    return prebuilt if prebuilt.exists() else folder / "build" / linux_name
+
+
+_copy_lock = threading.Lock()
+
+
+def runnable(exe: Path) -> Path:
+    """A path to `exe` that can be executed. Deploy bundles may drop the
+    executable bit and be read-only, so a copy in the temp folder is made
+    executable when needed. The phases run in parallel threads, so the copy
+    is written under a temporary name, made executable, then renamed into
+    place: no thread can see a half-written copy."""
+    if os.name == "nt" or os.access(exe, os.X_OK):
+        return exe
+    copy = Path(tempfile.gettempdir()) / "compiler-bin" / exe.name
+    with _copy_lock:
+        if not os.access(copy, os.X_OK):
+            copy.parent.mkdir(parents=True, exist_ok=True)
+            partial = copy.with_name(f"{copy.name}.{os.getpid()}.partial")
+            shutil.copyfile(exe, partial)
+            partial.chmod(0o755)
+            os.replace(partial, copy)
+    return copy
 
 
 @dataclass(frozen=True)
@@ -33,7 +70,7 @@ COMPILERS: dict[str, Compiler] = {
         id="c",
         name="tricora (C)",
         folder=BACKEND / "c-compiler",
-        exe=BACKEND / "c-compiler" / "build" / "tricora.exe",
+        exe=find_exe(BACKEND / "c-compiler", "tricora.exe", "tricora"),
         extension=".tri",
         monaco="c",
         phases=[TOKENS, AST, SYMTAB, TAC],
@@ -43,7 +80,7 @@ COMPILERS: dict[str, Compiler] = {
         id="cpp",
         name="compiler (C++)",
         folder=BACKEND / "c++_compiler",
-        exe=BACKEND / "c++_compiler" / "build" / "compiler.exe",
+        exe=find_exe(BACKEND / "c++_compiler", "compiler.exe", "compiler"),
         extension=".cpp",
         monaco="cpp",
         phases=[
@@ -63,7 +100,7 @@ COMPILERS: dict[str, Compiler] = {
         id="java",
         name="minijavac (Java)",
         folder=BACKEND / "javacompiler",
-        exe=BACKEND / "javacompiler" / "build" / "minijavac.exe",
+        exe=find_exe(BACKEND / "javacompiler", "minijavac.exe", "minijavac"),
         extension=".java",
         monaco="java",
         phases=[TOKENS, AST, SYMTAB, TAC],

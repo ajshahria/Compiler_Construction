@@ -109,6 +109,19 @@ server/     FastAPI; runs the .exe files in backend/*/build/ once per phase
 
 `npm run build` writes `frontend/dist/`; when that folder exists the server also serves the UI itself at http://localhost:8000, so only step 2 is needed.
 
+### Deploy to Vercel
+
+Vercel runs Linux, so the site uses static Linux builds of the three compilers in `server/bin/linux/` (generated files: do not edit them). `app.py` at the repository root is the entry point Vercel loads, and `vercel.json` builds the frontend and bundles the UI, the server, the Linux compilers and the example programs into one Python function.
+
+1. After changing any compiler, rebuild and test the Linux binaries (on Linux or in WSL; needs `sudo apt install build-essential flex bison`), then commit them:
+
+   ```sh
+   bash scripts/build-linux-binaries.sh
+   bash scripts/test-linux-binaries.sh
+   ```
+
+2. Import the GitHub repository at https://vercel.com/new (no settings to change), or deploy from this folder with `npx vercel --prod`. Every push to the connected branch redeploys.
+
 API: `GET /api/languages`, `GET /api/examples/{lang}`, `GET /api/examples/{lang}/file?path=...`, `POST /api/compile` with `{language, source, options, stdin}`.
 
 ## Example Compilation Workflow

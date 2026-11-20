@@ -16,7 +16,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from compilers import ALL_TABS, COMPILERS, ROOT, Compiler
+from compilers import ALL_TABS, COMPILERS, ROOT, Compiler, runnable
 
 TIMEOUT_SECONDS = 10
 MAX_SOURCE_BYTES = 200_000
@@ -78,7 +78,7 @@ def strip_section_header(text: str) -> str:
 def run_phase(compiler: Compiler, flag: str, source_path: Path, options: list[str], stdin: str) -> dict:
     try:
         result = subprocess.run(
-            [str(compiler.exe), *options, flag, str(source_path)],
+            [str(runnable(compiler.exe)), *options, flag, str(source_path)],
             input=stdin,
             capture_output=True,
             text=True,

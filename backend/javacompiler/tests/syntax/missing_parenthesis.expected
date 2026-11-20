@@ -1,4 +1,4 @@
 exit 1
 line 4: syntax error: unexpected '{'
-line 8: syntax error: unexpected '}', expecting $end
+line 8: syntax error: unexpected '}', expecting end of file
 Compilation failed: 0 lexical error(s), 2 syntax error(s).

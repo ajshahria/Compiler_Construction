@@ -28,6 +28,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <string>
 
 extern int yylex();
 void yyerror(const char* message);
@@ -207,14 +208,21 @@ expression
 /* Called by Bison on a syntax error. When the offending token starts a new
  * line and the previous line did not end with ';', '{' or '}', the mistake is
  * almost always a missing ';' at the end of the previous line, so that line is
- * reported instead. */
-void yyerror(const char* message) {
+ * reported instead. Bison 2.x calls the end of input "$end" and Bison 3.x
+ * "end of file"; both are printed as "end of file" so the messages do not
+ * depend on the Bison version. */
+void yyerror(const char* rawMessage) {
     extern int previousTokenLine, previousToken;
     const char* prefix = "syntax error, ";
     bool previousLineComplete = previousToken == ';' || previousToken == '{' || previousToken == '}';
 
-    if (std::strncmp(message, prefix, std::strlen(prefix)) == 0)
-        message += std::strlen(prefix);
+    if (std::strncmp(rawMessage, prefix, std::strlen(prefix)) == 0)
+        rawMessage += std::strlen(prefix);
+
+    std::string text = rawMessage;
+    for (std::size_t at; (at = text.find("$end")) != std::string::npos; )
+        text.replace(at, 4, "end of file");
+    const char* message = text.c_str();
 
     if (previousToken != 0 && yylloc.first_line > previousTokenLine && !previousLineComplete)
         std::fprintf(stderr, "line %d: syntax error: %s on line %d (missing ';' at the end of line %d?)\n",
