@@ -1,4 +1,3 @@
-// flags: --manual
 // Sample program from the project manual (section 5.5)
 int x;
 int y;

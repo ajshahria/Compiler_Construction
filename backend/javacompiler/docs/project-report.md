@@ -35,7 +35,7 @@ During the semester the compiler phases were studied separately. This project jo
 
 **Operators:** `+ - * / %`, `< > <= >= == !=`, `&& || !`, unary `-`.
 
-**Program form:** the manual's statements inside `class Name { public static void main(String[] args) { ... } }`. By default a bare list of statements is a syntax error, so C or C++ programs are not accepted as Java. With `--manual` the compiler also accepts the manual's sample program exactly as written in section 5.5, with no class, so the fixed language of section 3 is always supported.
+**Program form:** either a bare list of statements, exactly as the manual's sample program in section 5.5, or the same statements inside `class Name { public static void main(String[] args) { ... } }`. The bare form is accepted by default because it is the fixed language of section 3. With `--strict` only the class form is accepted, so a bare list of statements is reported as a syntax error.
 
 The complete CFG, precedence table and lexical rules are in [`language-grammar.md`](language-grammar.md).
 

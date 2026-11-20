@@ -1,4 +1,5 @@
-// The manual's form without --manual: a Java program must be a class.
+// flags: --strict
+// The manual's form with --strict: a Java program must be a class.
 int x;
 int y;
 bool flag;

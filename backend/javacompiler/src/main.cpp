@@ -51,7 +51,9 @@ void usage(const char* program) {
                  "  --all         print every phase: tokens, AST, symbol table, TAC,\n"
                  "                optimized TAC, assembly and the program output\n"
                  "  --emit-files  also write ast.txt, symbols.txt and output.tac (one file per phase)\n"
-                 "  --manual      also accept a program without a class, exactly as in the lab manual\n";
+                 "  --strict      require the Java form 'class Name { public static void main(...) { ... } }'\n"
+                 "                (by default the lab manual's bare statements are accepted too)\n"
+                 "  --manual      accept the lab manual's form (the default; kept for compatibility)\n";
 }
 
 const char* tokenCategory(int token) {
@@ -156,7 +158,8 @@ int main(int argc, char* argv[]) {
         else if (arg == "--run")                     mode = Mode::Run;
         else if (arg == "--all")                     mode = Mode::All;
         else if (arg == "--emit-files")              emitFiles = true;
-        else if (arg == "--manual")                  manualMode = true;
+        else if (arg == "--manual")                  manualMode = true;   // default; kept for old scripts
+        else if (arg == "--strict")                  manualMode = false;
         else if (arg == "-o" && i + 1 < argc)        output = argv[++i];
         else if (arg[0] != '-' && input == nullptr)  input = argv[i];
         else { usage(argv[0]); return 2; }

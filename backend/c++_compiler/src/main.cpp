@@ -53,7 +53,9 @@ static void usage() {
         "  -o <file>  write the assembly to <file>\n"
         "  --allow-no-header  do not require #include <iostream>\n"
         "  --allow-no-main    do not require int main() (statements may stand alone)\n"
-        "  --manual   same as both flags above: the lab manual's program style\n";
+        "  --manual   same as both flags above: the lab manual's program style\n"
+        "  --strict   always require #include <iostream> and int main(); by default a file\n"
+        "             with neither is compiled as the lab manual's language (section 5)\n";
 }
 
 int main(int argc, char** argv) {
@@ -61,7 +63,7 @@ int main(int argc, char** argv) {
     bool wOpt = false, wAsm = false, wRun = false;
     const char* file = NULL;
     const char* asmOut = NULL;
-    bool allowNoHeader = false, allowNoMain = false;
+    bool allowNoHeader = false, allowNoMain = false, strict = false;
 
     for (int i = 1; i < argc; i++) {
         std::string a = argv[i];
@@ -76,6 +78,7 @@ int main(int argc, char** argv) {
         else if (a == "--allow-no-header") allowNoHeader = true;
         else if (a == "--allow-no-main") allowNoMain = true;
         else if (a == "--manual") allowNoHeader = allowNoMain = true;
+        else if (a == "--strict") strict = true;
         else if (a == "--all") wHeaders = wTokens = wAst = wSym = wTac = wOpt = wAsm = wRun = true;
         else if (a == "-o" && i + 1 < argc) { asmOut = argv[++i]; wAsm = true; }
         else if (a == "--help" || a == "-h") { usage(); return 0; }
@@ -93,7 +96,12 @@ int main(int argc, char** argv) {
     yyparse();
     fclose(yyin);
 
-    // Every program must include <iostream>, at the top of the file.
+    // A file with no #include and no main() is written in the lab manual's language
+    // (section 5.5): a plain list of declarations and statements. Compile it as such.
+    if (!strict && headerCount() == 0 && g_mainCount == 0)
+        allowNoHeader = allowNoMain = true;
+
+    // Every C++-style program must include <iostream>, at the top of the file.
     if (!allowNoHeader && !hasHeader("iostream"))
         reportError(PH_LEXICAL, 1, "missing required header: add '#include <iostream>' at the top of the file");
 

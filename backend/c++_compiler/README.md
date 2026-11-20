@@ -59,6 +59,7 @@ make
 
 ```bash
 build/compiler.exe examples/headers_demo.cpp               # Three Address Code (default)
+build/compiler.exe --all tests/valid/manual_sample_no_header.cpp   # the manual's language, no flags needed
 build/compiler.exe --manual --all examples/sample.cpp      # every phase (manual-style program)
 build/compiler.exe --opt --run examples/floats.cpp         # optimized TAC, then run it
 build/compiler.exe --manual -o build/out.s examples/sample.cpp   # write x86 assembly
@@ -81,8 +82,9 @@ python examples/demo_programs.py                           # build/demo.html
 | `--allow-no-header` | do not require `#include <iostream>` |
 | `--allow-no-main` | do not require `int main()` |
 | `--manual` | both of the above, for programs written exactly in the manual's style |
+| `--strict` | always apply both rules below, even to a file with no `#include` and no `main` |
 
-The two rules these options relax:
+A file with **no `#include` and no `main`** is written in the lab manual's language (section 5.5), so it is compiled as that language with no flag. Any other file is treated as C++ and must follow two rules, which the options above relax:
 - A program must start with `#include <iostream>`, and `#include` lines must come before any code.
 - A program must define `int main() { ... }`. Only variable declarations may appear outside it.
 

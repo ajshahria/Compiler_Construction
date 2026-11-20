@@ -1,4 +1,4 @@
-// flags: --manual --run
+// flags: --run
 // The sample program of manual section 5.5 exactly as written (no class),
 // executed: y = 10 + 9 + ... + 1.
 int x;
