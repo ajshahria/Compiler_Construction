@@ -1,0 +1,8 @@
+# Not needed in the image (the frontend and compilers are built inside it).
+.git
+.claude
+**/node_modules
+frontend/dist
+server/.venv
+backend/*/build
+**/__pycache__
