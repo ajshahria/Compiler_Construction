@@ -120,7 +120,7 @@ docker run -p 8000:8000 tricora        # then open http://localhost:8000
 
 To put it online for free on [Render](https://render.com): sign in with GitHub, choose **New -> Blueprint**, and pick this repository. `render.yaml` creates one free web service that builds the `Dockerfile` from the `main` branch and redeploys on every push. The free plan sleeps after about 15 minutes without visitors, so the first visit after that takes 30-60 seconds.
 
-API: `GET /api/languages`, `GET /api/examples/{lang}`, `GET /api/examples/{lang}/file?path=...`, `POST /api/compile` with `{language, source, options, stdin}`.
+API: `GET /api/languages` (each language's tabs, options and starter program), `POST /api/compile` with `{language, source, options, stdin}`.
 
 ## Example Compilation Workflow
 

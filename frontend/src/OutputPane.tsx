@@ -18,6 +18,8 @@ interface Props {
 
 const VIEW_LANGUAGE: Partial<Record<TabId, string>> = { tac: "tac", opt: "tac", asm: "gas" };
 
+const NOT_COMPILED = "<Press Compile or Ctrl+Enter to run>";
+
 const EMPTY: Partial<Record<TabId, string>> = {
   headers: "<no #include headers found>",
   run: "<program printed nothing>",
@@ -89,7 +91,9 @@ export function OutputPane(p: Props) {
         {p.tab === "errors" ? (
           <div className="error-list">
             {p.failure && <div className="error-row server">{p.failure}</div>}
-            {!p.failure && errors.length === 0 && <div className="muted pad">No errors</div>}
+            {!p.failure && errors.length === 0 && (
+              <div className="muted pad">{p.result ? "No errors" : p.busy ? "Compiling…" : NOT_COMPILED}</div>
+            )}
             {errors.map((e, i) => (
               <button key={i} className="error-row" onClick={() => p.onJump(e)} disabled={e.line == null}>
                 {e.line != null && <span className="loc">line {e.line}</span>}
@@ -109,7 +113,9 @@ export function OutputPane(p: Props) {
                 ? "<Compilation failed. See the Errors tab.>"
                 : p.result
                   ? EMPTY[p.tab] ?? "<no output>"
-                  : "")
+                  : p.busy
+                    ? ""
+                    : NOT_COMPILED)
             }
             options={{
               readOnly: true,

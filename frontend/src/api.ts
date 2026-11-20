@@ -8,19 +8,13 @@ export interface Language {
   tabs: TabId[];
   options: string[];
   built: boolean;
-  defaultExample: string;
+  starter: string;  // program shown the first time the language is picked
   input: boolean;   // the language can read input (cin)
 }
 
 export interface LanguagesResponse {
   tabs: { id: TabId; label: string }[];
   languages: Language[];
-}
-
-export interface Example {
-  path: string;
-  group: string;
-  name: string;
 }
 
 export interface CompileError {
@@ -54,11 +48,6 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export const getLanguages = () => request<LanguagesResponse>("/api/languages");
-
-export const getExamples = (lang: string) => request<Example[]>(`/api/examples/${lang}`);
-
-export const getExample = (lang: string, path: string) =>
-  request<{ path: string; source: string }>(`/api/examples/${lang}/file?path=${encodeURIComponent(path)}`);
 
 export const compile = (body: { language: string; source: string; options: string[]; stdin: string }, signal?: AbortSignal) =>
   request<CompileResult>("/api/compile", {

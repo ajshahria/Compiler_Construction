@@ -107,7 +107,7 @@ def languages():
                 "tabs": [p[0] for p in c.phases] + ["errors"],
                 "options": c.allowed_options,
                 "built": c.exe.exists(),
-                "defaultExample": c.default_example,
+                "starter": starter_program(c),
                 "input": c.reads_input,
             }
             for c in COMPILERS.values()
@@ -115,27 +115,10 @@ def languages():
     }
 
 
-@app.get("/api/examples/{language}")
-def examples(language: str):
-    compiler = get_compiler(language)
-    found = []
-    for top in ("examples", "tests"):
-        base = compiler.folder / top
-        if not base.is_dir():
-            continue
-        for path in sorted(base.rglob(f"*{compiler.extension}")):
-            rel = path.relative_to(compiler.folder).as_posix()
-            found.append({"path": rel, "group": path.parent.relative_to(compiler.folder).as_posix(), "name": path.stem})
-    return found
-
-
-@app.get("/api/examples/{language}/file")
-def example_file(language: str, path: str):
-    compiler = get_compiler(language)
-    target = (compiler.folder / path).resolve()
-    if not target.is_relative_to(compiler.folder.resolve()) or target.suffix != compiler.extension or not target.is_file():
-        raise HTTPException(404, "Example not found")
-    return {"path": path, "source": target.read_text(encoding="utf-8", errors="replace")}
+def starter_program(compiler: Compiler) -> str:
+    """The program shown in the editor the first time a language is picked."""
+    path = compiler.folder / compiler.default_example
+    return path.read_text(encoding="utf-8", errors="replace") if path.is_file() else ""
 
 
 @app.post("/api/compile")
