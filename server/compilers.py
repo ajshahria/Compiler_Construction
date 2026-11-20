@@ -28,12 +28,17 @@ class Compiler:
     allowed_options: list[str] = field(default_factory=list)
     # source file to show when the language is first picked
     default_example: str = ""
+    # the language can read input (cin), so the Output tab offers an input box
+    reads_input: bool = False
 
 
 TOKENS = ("tokens", "Tokens", "--tokens")
 AST = ("ast", "AST", "--ast")
 SYMTAB = ("symtab", "Symbol Table", "--symtab")
 TAC = ("tac", "TAC", "--tac")
+OPT = ("opt", "Optimized TAC", "--opt")
+ASM = ("asm", "Assembly", "--asm")
+RUN = ("run", "Output", "--run")
 
 COMPILERS: dict[str, Compiler] = {
     "c": Compiler(
@@ -43,7 +48,7 @@ COMPILERS: dict[str, Compiler] = {
         exe=find_exe(BACKEND / "c-compiler", "tricora.exe", "tricora"),
         extension=".tri",
         monaco="c",
-        phases=[TOKENS, AST, SYMTAB, TAC],
+        phases=[TOKENS, AST, SYMTAB, TAC, OPT, ASM, RUN],
         default_example="examples/valid/manual_sample.tri",
     ),
     "cpp": Compiler(
@@ -59,12 +64,13 @@ COMPILERS: dict[str, Compiler] = {
             AST,
             SYMTAB,
             TAC,
-            ("opt", "Optimized TAC", "--opt"),
-            ("asm", "Assembly", "--asm"),
-            ("run", "Output", "--run"),
+            OPT,
+            ASM,
+            RUN,
         ],
         allowed_options=["--manual", "--allow-no-header", "--allow-no-main"],
         default_example="examples/headers_demo.cpp",
+        reads_input=True,
     ),
     "java": Compiler(
         id="java",
@@ -73,7 +79,7 @@ COMPILERS: dict[str, Compiler] = {
         exe=find_exe(BACKEND / "javacompiler", "minijavac.exe", "minijavac"),
         extension=".java",
         monaco="java",
-        phases=[TOKENS, AST, SYMTAB, TAC],
+        phases=[TOKENS, AST, SYMTAB, TAC, OPT, ASM, RUN],
         allowed_options=["--manual"],
         default_example="examples/Example.java",
     ),

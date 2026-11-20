@@ -25,7 +25,7 @@ export function EditorPane(p: Props) {
       <div className="pane-title">
         <span>source{p.language.extension}</span>
       </div>
-      <div className="toolbar">
+      <div className="toolbar editor-toolbar">
         <select
           className="examples"
           value=""
@@ -45,7 +45,6 @@ export function EditorPane(p: Props) {
             </optgroup>
           ))}
         </select>
-        <span className="spacer" />
         <div className="lang-toggle" role="radiogroup" aria-label="Language">
           {p.languages.map((l) => (
             <button
@@ -61,6 +60,9 @@ export function EditorPane(p: Props) {
             </button>
           ))}
         </div>
+        <button className="btn compile-btn" onClick={p.onCompile} disabled={p.busy} title="Compile (Ctrl+Enter)">
+          ▶ Compile
+        </button>
       </div>
       <div className="editor-wrap">
         <Editor
@@ -80,9 +82,6 @@ export function EditorPane(p: Props) {
         />
       </div>
       <div className="statusbar">
-        <button className="btn" onClick={p.onCompile} disabled={p.busy} title="Compile (Ctrl+Enter)">
-          ▶ Compile
-        </button>
         <label className="check">
           <input type="checkbox" checked={p.auto} onChange={(e) => p.onAuto(e.target.checked)} /> Compile on change
         </label>

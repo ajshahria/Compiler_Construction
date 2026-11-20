@@ -67,6 +67,11 @@ code { background: var(--bar-2); padding: 1px 5px; border-radius: 3px; }
   background: var(--bar); border-top: 1px solid var(--border);
 }
 
+/* Editor toolbar: examples on the left, language toggle centred, Compile on the right. */
+.editor-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
+.editor-toolbar .examples { justify-self: start; width: 100%; max-width: 190px; min-width: 0; }
+.editor-toolbar .compile-btn { justify-self: end; height: 30px; padding: 0 16px; font-weight: 600; white-space: nowrap; }
+
 .examples { background: var(--bar-2); border: 1px solid var(--border); border-radius: 3px; height: 30px; padding: 0 6px; }
 
 .lang-toggle { display: inline-flex; border: 1px solid #555; border-radius: 4px; overflow: hidden; }
@@ -121,6 +126,7 @@ code { background: var(--bar-2); padding: 1px 5px; border-radius: 3px; }
 .kind-lexical { background: #4d3a12; color: #ffd27a; }
 .kind-syntax { background: #5a1d1d; color: #ffb3b3; }
 .kind-semantic { background: #3b2a5a; color: #d5b8ff; }
+.kind-runtime { background: #12404d; color: #9fe3f5; }
 
 .stdin { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; background: var(--bar); border-top: 1px solid var(--border); }
 .stdin label { color: var(--muted); font-size: 12px; }

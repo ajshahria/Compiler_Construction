@@ -42,7 +42,7 @@ export default function App() {
   const [options, setOptions] = useState<Record<string, string[]>>(() => load("ce.options", {}));
   const [stdin, setStdin] = useState<string>(() => load("ce.stdin", ""));
   const [auto, setAuto] = useState<boolean>(() => load("ce.auto", true));
-  const [tab, setTab] = useState<TabId>(() => load("ce.tab", "tac"));
+  const [tab, setTab] = useState<TabId>("run");   // the Output tab is shown first
   const [split, setSplit] = useState<number>(() => load("ce.split", 50));
   const [examples, setExamples] = useState<Example[]>([]);
   const [result, setResult] = useState<CompileResult | null>(null);
@@ -68,7 +68,6 @@ export default function App() {
   useEffect(() => save("ce.options", options), [options]);
   useEffect(() => save("ce.stdin", stdin), [stdin]);
   useEffect(() => save("ce.auto", auto), [auto]);
-  useEffect(() => save("ce.tab", tab), [tab]);
   useEffect(() => save("ce.split", split), [split]);
 
   // Examples for the current language, and its default program on first use.
@@ -81,7 +80,7 @@ export default function App() {
         .then((r) => setSources((s) => (s[language.id] === undefined ? { ...s, [language.id]: r.source } : s)))
         .catch(() => setSources((s) => ({ ...s, [language.id]: "" })));
     }
-    if (!language.tabs.includes(tab)) setTab("tac");
+    if (!language.tabs.includes(tab)) setTab(language.tabs.includes("run") ? "run" : "tac");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [language?.id]);
 
