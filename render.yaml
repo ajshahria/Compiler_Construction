@@ -5,7 +5,7 @@ services:
     name: tricora
     runtime: docker
     plan: free
-    branch: master
+    branch: main
     dockerfilePath: ./Dockerfile
     healthCheckPath: /api/languages
     autoDeploy: true
