@@ -3,17 +3,21 @@
  *
  * Runs the pipeline   source -> lexer -> parser/AST -> semantic analysis
  * (symbol table + type checking) -> three address code   and prints the
- * output of the phase chosen on the command line.
+ * output of the phase chosen on the command line. The back end (backend.c)
+ * then optimizes the TAC, translates it to x86 assembly or runs it.
  *
- * Exit status: 0 = success, 1 = errors in the program, 2 = usage/file problem.
+ * Exit status: 0 = success, 1 = errors in the program (or a runtime error
+ * with --run), 2 = usage/file problem.
  */
 #include "ast.h"
+#include "backend.h"
 #include "codegen.h"
 #include "semantic.h"
 #include "symbol_table.h"
 #include "parser.tab.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 extern FILE *yyin;
@@ -27,7 +31,7 @@ extern StmtList *program_root;   /* set by the parser   */
 extern int lexer_errors;         /* counted by the lexer  */
 extern int parser_errors;        /* counted by the parser */
 
-typedef enum { MODE_TOKENS, MODE_AST, MODE_SYMTAB, MODE_TAC, MODE_ALL } Mode;
+typedef enum { MODE_TOKENS, MODE_AST, MODE_SYMTAB, MODE_TAC, MODE_OPT, MODE_ASM, MODE_RUN, MODE_ALL } Mode;
 
 static void usage(const char *program)
 {
@@ -38,7 +42,11 @@ static void usage(const char *program)
         "  --ast      print the abstract syntax tree\n"
         "  --symtab   print the symbol table after semantic analysis\n"
         "  --tac      print three address code (default)\n"
-        "  --all      print tokens, AST, symbol table and TAC\n",
+        "  --opt      print optimized three address code\n"
+        "  --asm      print x86 assembly (32-bit, AT&T syntax, MinGW)\n"
+        "  --run      run the program (TAC interpreter) and print its output\n"
+        "  --all      print every phase: tokens, AST, symbol table, TAC,\n"
+        "             optimized TAC, assembly and the program output\n",
         program);
 }
 
@@ -88,6 +96,66 @@ static void heading(FILE *out, const char *title)
     fprintf(out, "===== %s =====\n", title);
 }
 
+/* Back end: reads the TAC with the declared variable types from the symbol
+ * table, optimizes it, and prints the optimized TAC, the assembly and/or the
+ * program output. --asm and --run use the optimized TAC. Returns the exit
+ * status: 1 if the program stopped with a runtime error. */
+static int back_end(const char *tac, SymbolTable *table, Mode mode, FILE *out)
+{
+    int count = 0;
+    for (Symbol *s = table->first_declared; s != NULL; s = s->next_declared)
+        count++;
+    TacVar *vars = malloc((size_t)(count ? count : 1) * sizeof *vars);
+    if (vars == NULL) {
+        perror("out of memory");
+        return 2;
+    }
+    int k = 0;
+    for (Symbol *s = table->first_declared; s != NULL; s = s->next_declared, k++) {
+        vars[k].name = s->tac_name;
+        vars[k].type = s->type == TYPE_FLOAT ? TAC_FLOAT : s->type == TYPE_BOOL ? TAC_BOOL : TAC_INT;
+    }
+    char error[256];
+    TacProgram *program = tac_build(tac, vars, count, error, sizeof error);
+    free(vars);
+    if (program == NULL) {
+        fprintf(stderr, "internal error: %s\n", error);
+        return 2;
+    }
+    tac_optimize(program);
+
+    int status = 0;
+    if (mode == MODE_OPT || mode == MODE_ALL) {
+        if (mode == MODE_ALL)
+            heading(out, "OPTIMIZED THREE ADDRESS CODE");
+        char *text = tac_text(program);
+        fputs(text, out);
+        free(text);
+    }
+    if (mode == MODE_ASM || mode == MODE_ALL) {
+        if (mode == MODE_ALL)
+            heading(out, "X86 ASSEMBLY");
+        char *text = tac_assembly(program, "the Tricora C compiler");
+        fputs(text, out);
+        free(text);
+    }
+    if (mode == MODE_RUN || mode == MODE_ALL) {
+        if (mode == MODE_ALL)
+            heading(out, "PROGRAM OUTPUT");
+        const char *runtime_error;
+        char *text = tac_run(program, &runtime_error);
+        fputs(text, out);
+        free(text);
+        if (runtime_error != NULL) {
+            fflush(out);
+            fprintf(stderr, "%s\n", runtime_error);
+            status = 1;
+        }
+    }
+    tac_free(program);
+    return status;
+}
+
 int main(int argc, char **argv)
 {
     Mode mode = MODE_TAC;
@@ -99,6 +167,9 @@ int main(int argc, char **argv)
         else if (strcmp(argv[i], "--ast") == 0)    mode = MODE_AST;
         else if (strcmp(argv[i], "--symtab") == 0) mode = MODE_SYMTAB;
         else if (strcmp(argv[i], "--tac") == 0 || strcmp(argv[i], "--ir") == 0) mode = MODE_TAC;
+        else if (strcmp(argv[i], "--opt") == 0)    mode = MODE_OPT;
+        else if (strcmp(argv[i], "--asm") == 0)    mode = MODE_ASM;
+        else if (strcmp(argv[i], "--run") == 0)    mode = MODE_RUN;
         else if (strcmp(argv[i], "--all") == 0)    mode = MODE_ALL;
         else if (strcmp(argv[i], "-o") == 0 && i + 1 < argc) output = argv[++i];
         else if (argv[i][0] != '-' && input == NULL) input = argv[i];
@@ -180,11 +251,18 @@ int main(int argc, char **argv)
     }
 
     /* ---- Phase 4: intermediate code generation ---- */
-    if (mode == MODE_ALL)
-        heading(out, "THREE ADDRESS CODE");
-    generate_tac(program_root, out);
+    char *tac = generate_tac_text(program_root);
+    int status = 0;
+    if (mode == MODE_TAC || mode == MODE_ALL) {
+        if (mode == MODE_ALL)
+            heading(out, "THREE ADDRESS CODE");
+        fputs(tac, out);
+    }
+    if (mode != MODE_TAC)
+        status = back_end(tac, &table, mode, out);
+    free(tac);
 
     if (out != stdout)
         fclose(out);
-    return 0;
+    return status;
 }

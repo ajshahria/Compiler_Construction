@@ -160,6 +160,16 @@ L2:
 
 All variables share one namespace in TAC. When a declaration reuses a name that was already declared, for example a variable shadowing an outer one, it gets the TAC name `name@scope`. For the manual's section 4.6 example the output matches the manual exactly: `a = 5`, `b = 10`, `t1 = b * 2`, `t2 = a + t1`, `c = t2`.
 
+### Back end (beyond the manual's required phases)
+
+The manual's required output is the TAC (section 4.6); everything below is extra. `src/backend/` (the same back end as the C compiler, built as C++) reads the TAC text written by the generator back into a list of instructions. TAC carries no types, so the driver passes the declared type of every variable from the symbol table, and the type of each temporary is worked out from the instruction that defines it. On that list:
+
+- **Optimizer (`--opt`, a manual section 14 bonus):** constant propagation and folding inside each basic block (known values are forgotten at every label), conditional jumps with a known condition become `goto` or disappear, code after an unconditional `goto` is removed up to the next label, unused temporaries are dropped, `t = a op b; x = t` becomes `x = a op b`, and `goto L` directly before `L:` and labels nobody jumps to are removed. The passes repeat until nothing changes.
+- **Interpreter (`--run`):** executes the optimized TAC. int arithmetic is 32-bit, `print` writes ints, floats (`%g`) and `true`/`false`; division or modulo by zero stops with `Runtime error: ...` (exit status 1), and an endless loop is stopped after 10 million steps.
+- **Assembly (`--asm`):** 32-bit x86 in AT&T syntax for MinGW `gcc`, in the style of the C++ compiler: every variable and temporary has a memory cell, ints and bools go through `%eax`/`%ecx`, floats through the x87 stack, and `print` calls `printf`.
+
+The tests `asm_small`, `opt_constant_folding`, `run_*` cover these options; the interpreter's output was also checked against the assembled program run natively.
+
 ## 11. Challenges
 
 | Challenge | Resolution |
@@ -173,7 +183,7 @@ All variables share one namespace in TAC. When a declaration reuses a name that 
 
 ## 12. Testing
 
-`make test` runs `tests/run_tests.sh`. It compiles each `tests/<category>/*.java` file and compares the output and exit status with `<name>.expected`. A test can pass compiler options on its first line (`// flags: --manual`). Current result: **26 passed, 0 failed**.
+`make test` runs `tests/run_tests.sh`. It compiles each `tests/<category>/*.java` file and compares the output and exit status with `<name>.expected`. A test can pass compiler options on its first line (`// flags: --manual`). Current result: **31 passed, 0 failed**.
 
 | Category | Programs |
 |---|---|

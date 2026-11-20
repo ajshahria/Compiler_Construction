@@ -1,9 +1,10 @@
 # MiniJava Compiler
 
-A compiler front-end for the lab manual's mini language, written in C++ with Flex and Bison. A program must be a `class` with `main` (with `--manual`, a program without a class, exactly as in the manual, is also accepted); inside it, statements can be written exactly as in the manual (`bool`, `print x;`) or in Java style (`boolean`, `System.out.println(x);`). It stops at Three Address Code:
+A compiler front-end for the lab manual's mini language, written in C++ with Flex and Bison. A program must be a `class` with `main` (with `--manual`, a program without a class, exactly as in the manual, is also accepted); inside it, statements can be written exactly as in the manual (`bool`, `print x;`) or in Java style (`boolean`, `System.out.println(x);`). Its front end produces Three Address Code, the output the manual requires; an extra back end can then optimize the TAC, translate it to x86 assembly, or run it:
 
 ```text
 source (.java) -> lexer -> parser/AST -> semantic analysis (symbol table) -> Three Address Code
+                 -> back end: optimized TAC (--opt), x86 assembly (--asm), program output (--run)
 ```
 
 ## Directory contents
@@ -23,12 +24,13 @@ javacompiler/
 │   ├── symbol_table/symbol_table.{h,cpp}   stack of scopes: type, line, scope, TAC name, initialized
 │   ├── semantic/semantic.{h,cpp}   scope, type and definite-initialization checks
 │   ├── codegen/tac.{h,cpp}      Three Address Code generation
+│   ├── backend/backend.{h,cpp}  back end: optimizer (--opt), interpreter (--run), x86 assembly (--asm)
 │   └── common/                  types.h, diagnostics.h (shared error counters)
 ├── examples/
 │   └── Example.java             sample program in Java style
 └── tests/
     ├── run_tests.sh             runs every test and compares it with its .expected file
-    ├── valid/                   10 programs that compile to TAC
+    ├── valid/                   15 programs that compile (5 of them test --opt, --run or --asm)
     ├── lexical/                 3 programs with lexical errors
     ├── syntax/                  4 programs with syntax errors
     └── semantic/                9 programs with semantic errors
@@ -62,12 +64,15 @@ make run                                                # --all on examples/Exam
 | `--ast` | abstract syntax tree |
 | `--symtab` | symbol table |
 | `--tac` | Three Address Code (default) |
+| `--opt` | optimized Three Address Code (constant propagation and folding, unreachable code, dead temporaries) |
+| `--asm` | x86 assembly (32-bit, AT&T syntax; assemble with MinGW `gcc out.s -o out.exe`) |
+| `--run` | run the program with the TAC interpreter and print its output |
 | `--all` | all of the above |
 | `-o file` | write the output to a file |
 | `--manual` | also accept a program without a class, exactly as in the lab manual's sample (section 5.5) |
 | `--emit-files` | also write `ast.txt`, `symbols.txt` and `output.tac` (one file per phase) |
 
-Exit status: `0` compiled, `1` errors in the program, `2` usage or file problem. Errors are printed as `line N: <lexical|syntax|semantic> error: <description>`.
+Exit status: `0` compiled, `1` errors in the program (or, with `--run`, a runtime error such as division by zero), `2` usage or file problem. Errors are printed as `line N: <lexical|syntax|semantic> error: <description>`.
 
 ## Tests
 
@@ -80,7 +85,7 @@ Each `tests/<category>/<name>.java` has a matching `<name>.expected` file. Its f
 
 | Folder | Programs |
 |---|---|
-| `valid/` | do_while, for_loop, java_wrapper, manual_bare_sample, manual_sample, manual_tac_example, nested_scopes, smoke, sum_three, switch_case |
+| `valid/` | asm_small, do_while, for_loop, java_wrapper, manual_bare_sample, manual_sample, manual_tac_example, nested_scopes, opt_constant_folding, run_division_by_zero, run_manual_bare_sample, run_stress, smoke, sum_three, switch_case |
 | `lexical/` | bad_character, invalid_identifier, unterminated_comment |
 | `syntax/` | missing_class, missing_parenthesis, missing_semicolon, multiple_errors |
 | `semantic/` | break_outside_loop, invalid_assignment, invalid_expression, non_boolean_condition, redeclaration, scope_violation, type_mismatch, undeclared, uninitialized |

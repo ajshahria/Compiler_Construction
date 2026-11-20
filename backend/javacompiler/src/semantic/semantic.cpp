@@ -357,6 +357,12 @@ int analyze(Node* root) {
     return errorCount;
 }
 
+std::vector<std::pair<std::string, Type>> declaredVariables() {
+    std::vector<std::pair<std::string, Type>> variables;
+    for (const SymbolRecord& r : history) variables.emplace_back(r.tacName, r.type);
+    return variables;
+}
+
 std::string symbolTableReport() {
     std::ostringstream out;
     out << std::left << std::setw(16) << "Name" << std::setw(9) << "Type" << std::setw(7) << "Scope"

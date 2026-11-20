@@ -1,0 +1,40 @@
+// flags: --run
+// int/float/bool arithmetic, int-to-float assignment, a shadowing inner x,
+// a loop with if/else, and operator precedence, executed.
+int x;
+float f;
+bool b;
+int i;
+int s;
+
+x = 7;
+f = 2;
+f = f / 4.0 + 1.5;
+print f;
+b = !(x > 3) || false;
+print b;
+print -x % 3;
+print x / 2;
+{
+    int x;
+    x = 100;
+    print x + 1;
+}
+print x;
+
+i = 0;
+s = 0;
+while (i < 5) {
+    if (i % 2 == 0) {
+        s = s + i * i;
+    } else {
+        s = s - 1;
+    }
+    i = i + 1;
+}
+print s;
+
+f = x;
+print f * 0.5;
+print f > 3.4 && b == false;
+print 3 + 4 * 2 - 6 / 3;

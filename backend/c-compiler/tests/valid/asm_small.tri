@@ -1,0 +1,15 @@
+// flags: --asm
+// x86 assembly of a small loop with int, float and bool values.
+int i;
+float sum;
+bool done;
+
+i = 0;
+sum = 0.5;
+while (i < 3) {
+    sum = sum + i;
+    i = i + 1;
+}
+done = i == 3;
+print sum;
+print done;

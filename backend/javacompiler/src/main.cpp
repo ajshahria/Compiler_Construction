@@ -4,11 +4,14 @@
  * Runs the pipeline   source -> lexer -> parser/AST -> semantic analysis
  * (symbol table + type checking) -> three address code   and prints the
  * output of the phase chosen on the command line. Compilation stops after the
- * first phase that reports errors.
+ * first phase that reports errors. The back end (backend.cpp) then optimizes
+ * the TAC, translates it to x86 assembly or runs it.
  *
- * Exit status: 0 = success, 1 = errors in the program, 2 = usage/file problem.
+ * Exit status: 0 = success, 1 = errors in the program (or a runtime error
+ * with --run), 2 = usage/file problem.
  */
 #include "ast/ast.h"
+#include "backend/backend.h"
 #include "codegen/tac.h"
 #include "common/diagnostics.h"
 #include "semantic/semantic.h"
@@ -19,7 +22,9 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <string>
+#include <vector>
 
 extern FILE* yyin;
 extern char* yytext;
@@ -31,7 +36,7 @@ extern Node* syntaxRoot;
 
 namespace {
 
-enum class Mode { Tokens, Ast, Symtab, Tac, All };
+enum class Mode { Tokens, Ast, Symtab, Tac, Opt, Asm, Run, All };
 
 void usage(const char* program) {
     std::cerr << "Usage: " << program << " [option] <source-file> [-o output-file]\n"
@@ -40,7 +45,11 @@ void usage(const char* program) {
                  "  --ast         print the abstract syntax tree\n"
                  "  --symtab      print the symbol table after semantic analysis\n"
                  "  --tac         print three address code (default)\n"
-                 "  --all         print tokens, AST, symbol table and TAC\n"
+                 "  --opt         print optimized three address code\n"
+                 "  --asm         print x86 assembly (32-bit, AT&T syntax, MinGW)\n"
+                 "  --run         run the program (TAC interpreter) and print its output\n"
+                 "  --all         print every phase: tokens, AST, symbol table, TAC,\n"
+                 "                optimized TAC, assembly and the program output\n"
                  "  --emit-files  also write ast.txt, symbols.txt and output.tac (one file per phase)\n"
                  "  --manual      also accept a program without a class, exactly as in the lab manual\n";
 }
@@ -80,6 +89,54 @@ void heading(std::ostream& out, const char* title) {
     out << "===== " << title << " =====\n";
 }
 
+/* Back end: reads the TAC with the declared variable types, optimizes it,
+ * and prints the optimized TAC, the assembly and/or the program output.
+ * --asm and --run use the optimized TAC. Returns the exit status: 1 if the
+ * program stopped with a runtime error. */
+int backEnd(const std::string& tac, Mode mode, std::ostream& out) {
+    std::vector<std::pair<std::string, Type>> declared = declaredVariables();
+    std::vector<TacVar> vars;
+    for (const auto& d : declared)
+        vars.push_back(TacVar{d.first.c_str(), d.second == Type::Float ? TAC_FLOAT
+                                             : d.second == Type::Bool ? TAC_BOOL : TAC_INT});
+    char error[256];
+    TacProgram* program = tac_build(tac.c_str(), vars.data(), static_cast<int>(vars.size()),
+                                    error, sizeof error);
+    if (!program) {
+        std::cerr << "internal error: " << error << '\n';
+        return 2;
+    }
+    tac_optimize(program);
+
+    int status = 0;
+    if (mode == Mode::Opt || mode == Mode::All) {
+        if (mode == Mode::All) heading(out, "OPTIMIZED THREE ADDRESS CODE");
+        char* text = tac_text(program);
+        out << text;
+        std::free(text);
+    }
+    if (mode == Mode::Asm || mode == Mode::All) {
+        if (mode == Mode::All) heading(out, "X86 ASSEMBLY");
+        char* text = tac_assembly(program, "the MiniJava compiler");
+        out << text;
+        std::free(text);
+    }
+    if (mode == Mode::Run || mode == Mode::All) {
+        if (mode == Mode::All) heading(out, "PROGRAM OUTPUT");
+        const char* runtimeError = nullptr;
+        char* text = tac_run(program, &runtimeError);
+        out << text;
+        std::free(text);
+        if (runtimeError) {
+            out.flush();
+            std::cerr << runtimeError << '\n';
+            status = 1;
+        }
+    }
+    tac_free(program);
+    return status;
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -94,6 +151,9 @@ int main(int argc, char* argv[]) {
         else if (arg == "--ast")                     mode = Mode::Ast;
         else if (arg == "--symtab")                  mode = Mode::Symtab;
         else if (arg == "--tac")                     mode = Mode::Tac;
+        else if (arg == "--opt")                     mode = Mode::Opt;
+        else if (arg == "--asm")                     mode = Mode::Asm;
+        else if (arg == "--run")                     mode = Mode::Run;
         else if (arg == "--all")                     mode = Mode::All;
         else if (arg == "--emit-files")              emitFiles = true;
         else if (arg == "--manual")                  manualMode = true;
@@ -161,8 +221,13 @@ int main(int argc, char* argv[]) {
     }
 
     // ---- Phase 4: intermediate code generation ----
-    if (mode == Mode::All) heading(out, "THREE ADDRESS CODE");
-    generateTac(syntaxRoot, out);
+    std::ostringstream tacText;
+    generateTac(syntaxRoot, tacText);
+    if (mode == Mode::Tac || mode == Mode::All) {
+        if (mode == Mode::All) heading(out, "THREE ADDRESS CODE");
+        out << tacText.str();
+    }
+    int status = mode == Mode::Tac ? 0 : backEnd(tacText.str(), mode, out);
 
     if (emitFiles) {
         std::ofstream astFile("ast.txt");
@@ -174,5 +239,5 @@ int main(int argc, char* argv[]) {
     }
 
     freeTree(syntaxRoot);
-    return 0;
+    return status;
 }

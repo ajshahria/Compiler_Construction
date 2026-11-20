@@ -31,12 +31,37 @@
  */
 #include "codegen.h"
 
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 
-static FILE *out;
+/* The TAC is collected as text, so it can be printed (--tac) or handed to
+ * the back end (--opt, --run, --asm). */
+static char *code;
+static size_t code_length, code_capacity;
 static int temp_count;
 static int label_count;
+
+/* Appends one formatted TAC line to the code. */
+static void emit(const char *format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    int need = vsnprintf(NULL, 0, format, args);
+    va_end(args);
+    if (code_length + (size_t)need + 1 > code_capacity) {
+        code_capacity = (code_length + (size_t)need + 1) * 2;
+        code = realloc(code, code_capacity);
+        if (code == NULL) {
+            perror("out of memory");
+            exit(2);
+        }
+    }
+    va_start(args, format);
+    vsnprintf(code + code_length, (size_t)need + 1, format, args);
+    va_end(args);
+    code_length += (size_t)need;
+}
 
 static char *copy_string(const char *text)
 {
@@ -91,7 +116,7 @@ static char *gen_expr(Expr *e)
         char *left = gen_expr(e->as.binary.left);
         char *right = gen_expr(e->as.binary.right);
         char *result = new_temp();
-        fprintf(out, "%s = %s %s %s\n", result, left, operator_symbol(e->as.binary.op), right);
+        emit("%s = %s %s %s\n", result, left, operator_symbol(e->as.binary.op), right);
         free(left);
         free(right);
         return result;
@@ -99,7 +124,7 @@ static char *gen_expr(Expr *e)
     case EX_UNARY: {
         char *operand = gen_expr(e->as.unary.operand);
         char *result = new_temp();
-        fprintf(out, "%s = %s %s\n", result, operator_symbol(e->as.unary.op), operand);
+        emit("%s = %s %s\n", result, operator_symbol(e->as.unary.op), operand);
         free(operand);
         return result;
     }
@@ -111,7 +136,7 @@ static char *gen_expr(Expr *e)
 static void gen_assignment(const char *name, Expr *value)
 {
     char *address = gen_expr(value);
-    fprintf(out, "%s = %s\n", name, address);
+    emit("%s = %s\n", name, address);
     free(address);
 }
 
@@ -135,7 +160,7 @@ static void gen_stmt(Stmt *s)
 
     case ST_PRINT: {
         char *address = gen_expr(s->as.print);
-        fprintf(out, "print %s\n", address);
+        emit("print %s\n", address);
         free(address);
         break;
     }
@@ -143,17 +168,17 @@ static void gen_stmt(Stmt *s)
     case ST_IF: {
         int else_label = new_label();
         char *cond = gen_expr(s->as.if_stmt.cond);
-        fprintf(out, "ifFalse %s goto L%d\n", cond, else_label);
+        emit("ifFalse %s goto L%d\n", cond, else_label);
         free(cond);
         gen_stmt(s->as.if_stmt.then_branch);
         if (s->as.if_stmt.else_branch) {
             int end_label = new_label();
-            fprintf(out, "goto L%d\n", end_label);
-            fprintf(out, "L%d:\n", else_label);
+            emit("goto L%d\n", end_label);
+            emit("L%d:\n", else_label);
             gen_stmt(s->as.if_stmt.else_branch);
-            fprintf(out, "L%d:\n", end_label);
+            emit("L%d:\n", end_label);
         } else {
-            fprintf(out, "L%d:\n", else_label);
+            emit("L%d:\n", else_label);
         }
         break;
     }
@@ -161,13 +186,13 @@ static void gen_stmt(Stmt *s)
     case ST_WHILE: {
         int start_label = new_label();
         int end_label = new_label();
-        fprintf(out, "L%d:\n", start_label);
+        emit("L%d:\n", start_label);
         char *cond = gen_expr(s->as.while_stmt.cond);
-        fprintf(out, "ifFalse %s goto L%d\n", cond, end_label);
+        emit("ifFalse %s goto L%d\n", cond, end_label);
         free(cond);
         gen_stmt(s->as.while_stmt.body);
-        fprintf(out, "goto L%d\n", start_label);
-        fprintf(out, "L%d:\n", end_label);
+        emit("goto L%d\n", start_label);
+        emit("L%d:\n", end_label);
         break;
     }
 
@@ -186,10 +211,20 @@ static void gen_list(StmtList *list)
         gen_stmt(list->items[i]);
 }
 
-void generate_tac(StmtList *program, FILE *output)
+char *generate_tac_text(StmtList *program)
 {
-    out = output;
+    code = NULL;
+    code_length = code_capacity = 0;
     temp_count = 0;
     label_count = 0;
+    emit("%s", "");           /* an empty program still gets an empty string */
     gen_list(program);
+    return code;
+}
+
+void generate_tac(StmtList *program, FILE *output)
+{
+    char *text = generate_tac_text(program);
+    fputs(text, output);
+    free(text);
 }
