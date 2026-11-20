@@ -3,12 +3,9 @@ import type { OnMount } from "@monaco-editor/react";
 import { monaco } from "./monacoSetup";
 import {
   compile,
-  getExample,
-  getExamples,
   getLanguages,
   type CompileError,
   type CompileResult,
-  type Example,
   type LanguagesResponse,
   type TabId,
 } from "./api";
@@ -16,6 +13,22 @@ import { EditorPane } from "./EditorPane";
 import { OutputPane } from "./OutputPane";
 
 type IEditor = Parameters<OnMount>[0];
+
+/* The browser's "Save as" dialog (File System Access API, Chrome and Edge). */
+type SaveFilePicker = (options: { suggestedName: string }) => Promise<{
+  name: string;
+  createWritable: () => Promise<{ write: (data: Blob) => Promise<void>; close: () => Promise<void> }>;
+}>;
+
+const MAX_FILE_BYTES = 200_000;   // the server's limit on a source file
+
+/* Which compiler a file opens in, by its extension. */
+const EXTENSION_LANGUAGE: Record<string, string> = {
+  ".tri": "c", ".c": "c",
+  ".cpp": "cpp", ".cc": "cpp", ".cxx": "cpp", ".h": "cpp", ".hpp": "cpp",
+  ".java": "java",
+};
+const OPEN_TYPES = ".tri,.c,.cpp,.cc,.cxx,.h,.hpp,.java,.txt";
 
 function load<T>(key: string, fallback: T): T {
   try {
@@ -41,21 +54,23 @@ export default function App() {
   const [sources, setSources] = useState<Record<string, string>>(() => load("ce.sources", {}));
   const [options, setOptions] = useState<Record<string, string[]>>(() => load("ce.options", {}));
   const [stdin, setStdin] = useState<string>(() => load("ce.stdin", ""));
-  const [auto, setAuto] = useState<boolean>(() => load("ce.auto", true));
   const [tab, setTab] = useState<TabId>("run");   // the Output tab is shown first
   const [split, setSplit] = useState<number>(() => load("ce.split", 50));
-  const [examples, setExamples] = useState<Example[]>([]);
   const [result, setResult] = useState<CompileResult | null>(null);
   const [failure, setFailure] = useState("");
   const [busy, setBusy] = useState(false);
+  // (a new storage key, so names saved when C files were called .tri start fresh)
+  const [fileNames, setFileNames] = useState<Record<string, string>>(() => load("ce.fileNames", {}));
 
   const editorRef = useRef<IEditor | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const compileRef = useRef<() => void>(() => {});
+  const saveFileRef = useRef<() => void>(() => {});
 
   const language = meta?.languages.find((l) => l.id === lang) ?? meta?.languages[0];
   const source = language ? sources[language.id] : undefined;
   const langOptions = language ? options[language.id] ?? [] : [];
+  const fileName = language ? fileNames[language.id] ?? `source${language.extension}` : "";
 
   useEffect(() => {
     getLanguages()
@@ -67,19 +82,14 @@ export default function App() {
   useEffect(() => save("ce.sources", sources), [sources]);
   useEffect(() => save("ce.options", options), [options]);
   useEffect(() => save("ce.stdin", stdin), [stdin]);
-  useEffect(() => save("ce.auto", auto), [auto]);
   useEffect(() => save("ce.split", split), [split]);
+  useEffect(() => save("ce.fileNames", fileNames), [fileNames]);
 
-  // Examples for the current language, and its default program on first use.
+  // The starter program the first time a language is picked.
   useEffect(() => {
     if (!language) return;
-    setExamples([]);
-    getExamples(language.id).then(setExamples).catch(() => setExamples([]));
-    if (sources[language.id] === undefined && language.defaultExample) {
-      getExample(language.id, language.defaultExample)
-        .then((r) => setSources((s) => (s[language.id] === undefined ? { ...s, [language.id]: r.source } : s)))
-        .catch(() => setSources((s) => ({ ...s, [language.id]: "" })));
-    }
+    if (sources[language.id] === undefined)
+      setSources((s) => (s[language.id] === undefined ? { ...s, [language.id]: language.starter } : s));
     if (!language.tabs.includes(tab)) setTab(language.tabs.includes("run") ? "run" : "tac");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [language?.id]);
@@ -107,19 +117,18 @@ export default function App() {
 
   compileRef.current = runCompile;
 
-  // Compile on change (debounced) and whenever the language or options change.
-  useEffect(() => {
-    if (!auto || source === undefined) return;
-    const t = setTimeout(runCompile, 700);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auto, language?.id, source, JSON.stringify(langOptions), stdin]);
-
-  // Drop results from another language as soon as the toggle moves.
-  useEffect(() => {
+  // Code is compiled only when the user asks (Compile button or Ctrl+Enter).
+  // Output that belongs to other code is cleared: when the language changes
+  // (a compile still running for the old language is cancelled too).
+  const clearOutput = () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setBusy(false);
     setResult(null);
     setFailure("");
-  }, [language?.id]);
+  };
+
+  useEffect(clearOutput, [language?.id]);
 
   // Red squiggles in the editor for every error with a line number.
   useEffect(() => {
@@ -144,7 +153,81 @@ export default function App() {
   const onMount: OnMount = (editor) => {
     editorRef.current = editor;
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => compileRef.current());
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => saveFileRef.current());
   };
+
+  // Ctrl+S outside the editor saves the program too (instead of the browser's "Save page").
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        saveFileRef.current();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const setFileName = (name: string) => {
+    if (!language) return;
+    // characters that no file name may contain
+    setFileNames((all) => ({ ...all, [language.id]: name.replace(/[\\/:*?"<>|]/g, "") }));
+  };
+
+  // Opening a file picks the language from its extension and loads it into the editor.
+  const openFile = async (file: File) => {
+    if (!meta || !language) return;
+    if (file.size > MAX_FILE_BYTES) {
+      setFailure(`${file.name} is larger than ${MAX_FILE_BYTES / 1000} KB, the most the compiler accepts.`);
+      return;
+    }
+    try {
+      const text = await file.text();
+      const dot = file.name.lastIndexOf(".");
+      const ext = dot >= 0 ? file.name.slice(dot).toLowerCase() : "";
+      const id = EXTENSION_LANGUAGE[ext] ?? language.id;
+      const target = meta.languages.find((l) => l.id === id) ?? language;
+      setSources((s) => ({ ...s, [target.id]: text }));
+      setFileNames((all) => ({ ...all, [target.id]: file.name }));
+      setLang(target.id);
+      clearOutput();
+    } catch (e) {
+      setFailure(`Couldn't read ${file.name}: ${String((e as Error).message ?? e)}`);
+    }
+  };
+
+  // Saving asks where to save when the browser supports it (Chrome, Edge),
+  // and otherwise downloads the file under its name.
+  const saveFile = async () => {
+    if (!language) return;
+    let name = fileName.trim() || "source";
+    if (!/\.[A-Za-z0-9]+$/.test(name)) name += language.extension;
+    const blob = new Blob([source ?? ""], { type: "text/plain" });
+    const picker = (window as unknown as { showSaveFilePicker?: SaveFilePicker }).showSaveFilePicker;
+    if (picker) {
+      try {
+        const handle = await picker({ suggestedName: name });
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        setFileName(handle.name);
+        return;
+      } catch (e) {
+        if ((e as Error).name === "AbortError") return;   // the user closed the dialog
+        // not allowed here (for example inside a frame): fall back to a download
+      }
+    }
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setFileName(name);
+  };
+  saveFileRef.current = saveFile;
 
   const jump = (e: CompileError) => {
     const ed = editorRef.current;
@@ -154,12 +237,6 @@ export default function App() {
     ed.focus();
   };
 
-  const loadExample = (path: string) => {
-    if (!language) return;
-    getExample(language.id, path)
-      .then((r) => setSources((s) => ({ ...s, [language.id]: r.source })))
-      .catch((e) => setFailure(String(e.message ?? e)));
-  };
 
   const toggleOption = (o: string) => {
     if (!language) return;
@@ -213,13 +290,14 @@ export default function App() {
             onLanguage={setLang}
             source={source ?? ""}
             onSource={(s) => setSources((all) => ({ ...all, [language.id]: s }))}
-            examples={examples}
-            onExample={loadExample}
             onMount={onMount}
-            auto={auto}
-            onAuto={setAuto}
             onCompile={runCompile}
             busy={busy}
+            fileName={fileName}
+            onFileName={setFileName}
+            onOpenFile={openFile}
+            onSaveFile={saveFile}
+            openTypes={OPEN_TYPES}
           />
           <div className="splitter" onPointerDown={startDrag} role="separator" aria-orientation="vertical" />
           <OutputPane

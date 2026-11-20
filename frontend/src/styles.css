@@ -56,6 +56,21 @@ code { background: var(--bar-2); padding: 1px 5px; border-radius: 3px; }
   background: #1a1a1a; border-bottom: 1px solid var(--border); font-size: 12px; color: #ccc;
 }
 .pane-title span { background: var(--bg); padding: 4px 10px; border: 1px solid var(--border); border-bottom: 0; margin-top: 4px; }
+
+/* Editor title row: editable file name, then Open / Save */
+.file-bar { gap: 6px; height: 30px; }
+.file-name {
+  background: var(--bg); color: #ccc; font-size: 12px;
+  border: 1px solid var(--border); border-bottom: 0; border-radius: 0;
+  padding: 3px 8px; margin-top: 5px; height: 25px; min-width: 0; max-width: 60%;
+}
+.file-name:hover { border-color: #555; }
+.file-name:focus { outline: 1px solid var(--accent-2); color: #fff; }
+.file-btn {
+  background: var(--bar-2); border: 1px solid #555; border-radius: 4px;
+  height: 30px; padding: 0 14px; cursor: pointer; color: #ddd; font-weight: 600;
+}
+.file-btn:hover { background: #3a3a3a; color: #fff; }
 .toolbar {
   display: flex; align-items: center; gap: 10px;
   min-height: 44px; padding: 6px 10px;
@@ -67,12 +82,11 @@ code { background: var(--bar-2); padding: 1px 5px; border-radius: 3px; }
   background: var(--bar); border-top: 1px solid var(--border);
 }
 
-/* Editor toolbar: examples on the left, language toggle centred, Compile on the right. */
+/* Editor toolbar: Open / Save on the left, language toggle centred, Compile on the right. */
 .editor-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
-.editor-toolbar .examples { justify-self: start; width: 100%; max-width: 190px; min-width: 0; }
+.editor-toolbar .file-actions { justify-self: start; display: flex; gap: 6px; }
 .editor-toolbar .compile-btn { justify-self: end; height: 30px; padding: 0 16px; font-weight: 600; white-space: nowrap; }
 
-.examples { background: var(--bar-2); border: 1px solid var(--border); border-radius: 3px; height: 30px; padding: 0 6px; }
 
 .lang-toggle { display: inline-flex; border: 1px solid #555; border-radius: 4px; overflow: hidden; }
 .lang-toggle button {
@@ -93,7 +107,6 @@ code { background: var(--bar-2); padding: 1px 5px; border-radius: 3px; }
 .btn { background: var(--accent-2); color: #fff; border: 0; border-radius: 3px; padding: 4px 12px; cursor: pointer; }
 .btn:hover { background: #1177bb; }
 .btn:disabled { opacity: 0.6; cursor: default; }
-.check { display: flex; align-items: center; gap: 6px; color: #ccc; }
 
 .editor-wrap, .output-body { flex: 1; min-height: 0; position: relative; }
 
