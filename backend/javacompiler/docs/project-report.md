@@ -35,7 +35,7 @@ During the semester the compiler phases were studied separately. This project jo
 
 **Operators:** `+ - * / %`, `< > <= >= == !=`, `&& || !`, unary `-`.
 
-**Program form:** either a bare list of statements, exactly as in the manual's sample program, or the same statements inside `class Name { public static void main(String[] args) { ... } }`.
+**Program form:** the manual's statements inside `class Name { public static void main(String[] args) { ... } }`. A bare list of statements is a syntax error, so C or C++ programs are not accepted as Java.
 
 The complete CFG, precedence table and lexical rules are in [`language-grammar.md`](language-grammar.md).
 

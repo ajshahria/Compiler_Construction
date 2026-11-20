@@ -1,6 +1,6 @@
 # MiniJava Compiler
 
-A compiler front-end for the lab manual's mini language, written in C++ with Flex and Bison. A program can be written exactly as in the manual (`bool`, `print x;`) or in Java style, as a `class` with `main`, `boolean` and `System.out.println(x);`. It stops at Three Address Code:
+A compiler front-end for the lab manual's mini language, written in C++ with Flex and Bison. A program must be a `class` with `main`; inside it, statements can be written exactly as in the manual (`bool`, `print x;`) or in Java style (`boolean`, `System.out.println(x);`). It stops at Three Address Code:
 
 ```text
 source (.java) -> lexer -> parser/AST -> semantic analysis (symbol table) -> Three Address Code
