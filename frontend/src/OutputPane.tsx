@@ -9,8 +9,6 @@ interface Props {
   result: CompileResult | null;
   failure: string;
   busy: boolean;
-  options: string[];
-  onToggleOption: (o: string) => void;
   stdin: string;
   onStdin: (s: string) => void;
   onJump: (e: CompileError) => void;
@@ -48,24 +46,6 @@ export function OutputPane(p: Props) {
       <div className="pane-title">
         <span>{p.language.name}</span>
       </div>
-      {/* Option chips; a compiler with no options (C) gets no toolbar at all. */}
-      {p.language.options.length > 0 && (
-        <div className="toolbar">
-          <span className="compiler-name">{p.language.name}</span>
-          <div className="options">
-            {p.language.options.map((o) => (
-              <button
-                key={o}
-                className={`chip ${p.options.includes(o) ? "on" : ""}`}
-                onClick={() => p.onToggleOption(o)}
-                aria-pressed={p.options.includes(o)}
-              >
-                {o}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
       <div className="tabs" role="tablist">
         {p.tabs.map((t) => {
           const ok = supported.has(t.id);

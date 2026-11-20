@@ -99,10 +99,6 @@ code { background: var(--bar-2); padding: 1px 5px; border-radius: 3px; }
 .lang-toggle button.on { background: var(--accent-2); color: #fff; }
 .dot-warn { position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: #e0a020; }
 
-.compiler-name { font-size: 15px; white-space: nowrap; }
-.options { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; justify-content: flex-end; }
-.chip { background: var(--chip); border: 1px solid transparent; border-radius: 3px; padding: 3px 8px; cursor: pointer; font-family: Consolas, monospace; font-size: 12px; }
-.chip.on { border-color: var(--accent-2); background: #094771; color: #fff; }
 
 .btn { background: var(--accent-2); color: #fff; border: 0; border-radius: 3px; padding: 4px 12px; cursor: pointer; }
 .btn:hover { background: #1177bb; }
