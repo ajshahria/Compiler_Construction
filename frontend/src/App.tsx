@@ -52,7 +52,6 @@ export default function App() {
   const [metaError, setMetaError] = useState("");
   const [lang, setLang] = useState<string>(() => load("ce.lang", "cpp"));
   const [sources, setSources] = useState<Record<string, string>>(() => load("ce.sources", {}));
-  const [options, setOptions] = useState<Record<string, string[]>>(() => load("ce.options", {}));
   const [stdin, setStdin] = useState<string>(() => load("ce.stdin", ""));
   const [tab, setTab] = useState<TabId>("run");   // the Output tab is shown first
   const [split, setSplit] = useState<number>(() => load("ce.split", 50));
@@ -69,8 +68,6 @@ export default function App() {
 
   const language = meta?.languages.find((l) => l.id === lang) ?? meta?.languages[0];
   const source = language ? sources[language.id] : undefined;
-  // Drop saved options the server no longer offers (e.g. an old "--manual" in localStorage).
-  const langOptions = language ? (options[language.id] ?? []).filter((o) => language.options.includes(o)) : [];
   const fileName = language ? fileNames[language.id] ?? `source${language.extension}` : "";
 
   useEffect(() => {
@@ -81,7 +78,6 @@ export default function App() {
 
   useEffect(() => save("ce.lang", lang), [lang]);
   useEffect(() => save("ce.sources", sources), [sources]);
-  useEffect(() => save("ce.options", options), [options]);
   useEffect(() => save("ce.stdin", stdin), [stdin]);
   useEffect(() => save("ce.split", split), [split]);
   useEffect(() => save("ce.fileNames", fileNames), [fileNames]);
@@ -101,7 +97,7 @@ export default function App() {
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setBusy(true);
-    compile({ language: language.id, source, options: langOptions, stdin }, ctrl.signal)
+    compile({ language: language.id, source, options: [], stdin }, ctrl.signal)
       .then((r) => {
         setResult(r);
         setFailure("");
@@ -114,7 +110,7 @@ export default function App() {
       .finally(() => {
         if (abortRef.current === ctrl) setBusy(false);
       });
-  }, [language, source, langOptions, stdin]);
+  }, [language, source, stdin]);
 
   compileRef.current = runCompile;
 
@@ -239,14 +235,6 @@ export default function App() {
   };
 
 
-  const toggleOption = (o: string) => {
-    if (!language) return;
-    setOptions((all) => {
-      const cur = all[language.id] ?? [];
-      return { ...all, [language.id]: cur.includes(o) ? cur.filter((x) => x !== o) : [...cur, o] };
-    });
-  };
-
   const startDrag = (e: React.PointerEvent) => {
     const main = (e.currentTarget as HTMLElement).parentElement!;
     const rect = main.getBoundingClientRect();
@@ -309,8 +297,6 @@ export default function App() {
             result={result}
             failure={failure}
             busy={busy}
-            options={langOptions}
-            onToggleOption={toggleOption}
             stdin={stdin}
             onStdin={setStdin}
             onJump={jump}
