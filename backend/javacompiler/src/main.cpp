@@ -41,7 +41,8 @@ void usage(const char* program) {
                  "  --symtab      print the symbol table after semantic analysis\n"
                  "  --tac         print three address code (default)\n"
                  "  --all         print tokens, AST, symbol table and TAC\n"
-                 "  --emit-files  also write ast.txt, symbols.txt and output.tac (used by the GUI)\n";
+                 "  --emit-files  also write ast.txt, symbols.txt and output.tac (one file per phase)\n"
+                 "  --manual      also accept a program without a class, exactly as in the lab manual\n";
 }
 
 const char* tokenCategory(int token) {
@@ -95,6 +96,7 @@ int main(int argc, char* argv[]) {
         else if (arg == "--tac")                     mode = Mode::Tac;
         else if (arg == "--all")                     mode = Mode::All;
         else if (arg == "--emit-files")              emitFiles = true;
+        else if (arg == "--manual")                  manualMode = true;
         else if (arg == "-o" && i + 1 < argc)        output = argv[++i];
         else if (arg[0] != '-' && input == nullptr)  input = argv[i];
         else { usage(argv[0]); return 2; }

@@ -80,6 +80,50 @@ cd compiler-construction-project
 # run the compiler on an input program
 ```
 
+## Web UI (Compiler Explorer style)
+
+One browser UI for all three compilers: a source editor on the left with a **C / C++ / Java** toggle, and the compiler output on the right with one tab per phase (Headers, Tokens, AST, Symbol Table, TAC, Optimized TAC, Assembly, Output, Errors). Tabs a compiler does not produce are greyed out; errors are listed in the Errors tab and underlined in the editor.
+
+```text
+frontend/   Vite + React + Monaco editor
+server/     FastAPI; runs the .exe files in backend/*/build/ once per phase
+```
+
+1. Build the compilers: run `make` in `backend/c-compiler`, `backend/c++_compiler` and `backend/javacompiler`.
+2. Start the server:
+
+   ```sh
+   cd server
+   python -m venv .venv
+   .venv/Scripts/python -m pip install -r requirements.txt     # Linux/macOS: .venv/bin/python
+   .venv/Scripts/python -m uvicorn main:app --port 8000
+   ```
+
+3. Start the frontend in a second terminal, then open http://localhost:5173:
+
+   ```sh
+   cd frontend
+   npm install
+   npm run dev
+   ```
+
+`npm run build` writes `frontend/dist/`; when that folder exists the server also serves the UI itself at http://localhost:8000, so only step 2 is needed.
+
+### Deploy to Vercel
+
+Vercel runs Linux, so the site uses static Linux builds of the three compilers in `server/bin/linux/` (generated files: do not edit them). `app.py` at the repository root is the entry point Vercel loads, and `vercel.json` builds the frontend and bundles the UI, the server, the Linux compilers and the example programs into one Python function.
+
+1. After changing any compiler, rebuild and test the Linux binaries (on Linux or in WSL; needs `sudo apt install build-essential flex bison`), then commit them:
+
+   ```sh
+   bash scripts/build-linux-binaries.sh
+   bash scripts/test-linux-binaries.sh
+   ```
+
+2. Import the GitHub repository at https://vercel.com/new (no settings to change), or deploy from this folder with `npx vercel --prod`. Every push to the connected branch redeploys.
+
+API: `GET /api/languages`, `GET /api/examples/{lang}`, `GET /api/examples/{lang}/file?path=...`, `POST /api/compile` with `{language, source, options, stdin}`.
+
 ## Example Compilation Workflow
 
 ```text
@@ -117,7 +161,7 @@ This repository is planned as a simple but functional compiler construction proj
 
 A Flex/Bison compiler written in C++ for the fixed mini language of the lab manual
 (`int`/`float`/`bool`, `if`/`else`, `while`, `print`, nested scopes) plus C++-style extras.
-It implements all six phases and ships a small UI.
+It implements all six phases; the web UI above shows each one in its own tab.
 
 ## Build and run
 
@@ -127,7 +171,6 @@ make                                   # builds build/compiler.exe (needs g++, f
 build/compiler.exe examples/headers_demo.cpp # prints TAC (default)
 build/compiler.exe --manual --all examples/sample.cpp   # the manual's sample needs --manual
 make test                              # runs every program in tests/ against its .expected file
-python ui/compiler_ui.py               # GUI: editor + one tab per phase
 ```
 
 | Flag | Output |
@@ -152,11 +195,11 @@ python ui/compiler_ui.py               # GUI: editor + one tab per phase
 | 6 Code generation | `src/codegen/codegen.*`, `src/codegen/assembly.*`, `src/interpreter/interpreter.*` |
 | Driver / errors | `src/main.cpp`, `src/common/` |
 
-Formal grammar: [`backend/c++_compiler/docs/grammar.md`](backend/c++_compiler/docs/grammar.md). Test programs: `backend/c++_compiler/tests/{valid,lexical,syntax,semantic}`. Full guide: [`README_CPP.md`](backend/c++_compiler/README_CPP.md).
+Formal grammar: [`backend/c++_compiler/docs/grammar.md`](backend/c++_compiler/docs/grammar.md). Test programs: `backend/c++_compiler/tests/{valid,lexical,syntax,semantic}`. Full guide: [`README.md`](backend/c++_compiler/README.md).
 
 ## C++ extras (bonus)
 
-`int main()`, `cout << "text" << x << endl;`, `cin >>`, `for`, `do-while`, `switch`, `break`/`continue`, `?:`, `x++`, `+=` and more — see `README_CPP.md` for the full list.
+`int main()`, `cout << "text" << x << endl;`, `cin >>`, `for`, `do-while`, `switch`, `break`/`continue`, `?:`, `x++`, `+=` and more — see [`docs/grammar.md`](backend/c++_compiler/docs/grammar.md) for the full list.
 
 ## Header files (`#include`)
 

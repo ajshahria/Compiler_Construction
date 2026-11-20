@@ -3,7 +3,6 @@
 #   make          build build/minijavac
 #   make test     build, then run every program in tests/ against its .expected file
 #   make run      compile examples/Example.java
-#   make ui       build and start the Windows GUI
 #   make clean    remove everything generated in build/
 #
 # Requires g++ (C++17), flex and bison (Bison 2.4 or newer).
@@ -20,7 +19,6 @@ PARSER        := $(BUILD_DIR)/parser.tab.cpp
 PARSER_HEADER := $(BUILD_DIR)/parser.tab.hpp
 LEXER         := $(BUILD_DIR)/lex.yy.cpp
 COMPILER      := $(BUILD_DIR)/minijavac$(EXE_SUFFIX)
-UI            := $(BUILD_DIR)/compiler_ui.exe
 
 CXXFLAGS ?= -std=c++17 -Wall -Wextra -O2
 CPPFLAGS += -I$(SRC_DIR) -I$(BUILD_DIR)
@@ -32,7 +30,7 @@ SOURCES := $(SRC_DIR)/main.cpp \
            $(SRC_DIR)/codegen/tac.cpp
 HEADERS := $(wildcard $(SRC_DIR)/*/*.h)
 
-.PHONY: all clean run test ui
+.PHONY: all clean run test
 
 all: $(COMPILER)
 
@@ -53,12 +51,6 @@ $(COMPILER): $(SOURCES) $(HEADERS) $(PARSER) $(LEXER)
 
 run: all
 	$(COMPILER) --all examples/Example.java
-
-$(UI): ui/main.cpp | $(BUILD_DIR)
-	$(CXX) -std=c++17 -Wall -Wextra -O2 -mwindows $< -o $@ -lcomdlg32 -lcomctl32
-
-ui: all $(UI)
-	$(UI)
 
 test: all
 	sh tests/run_tests.sh

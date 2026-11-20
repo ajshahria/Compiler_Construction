@@ -1,2 +1,6 @@
-// The example from section 4.5 of the lab manual.
-bool b = 5 + 3.2;
+class TypeMismatch {
+    public static void main(String[] args) {
+        // The example from section 4.5 of the lab manual.
+        bool b = 5 + 3.2;
+    }
+}

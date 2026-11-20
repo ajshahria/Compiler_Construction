@@ -1,7 +1,11 @@
-// TAC example from section 4.6 of the lab manual.
-int a;
-int b;
-int c;
-a = 5;
-b = 10;
-c = a + b * 2;
+class ManualTacExample {
+    public static void main(String[] args) {
+        // TAC example from section 4.6 of the lab manual.
+        int a;
+        int b;
+        int c;
+        a = 5;
+        b = 10;
+        c = a + b * 2;
+    }
+}

@@ -3,7 +3,7 @@
 This is the context-free grammar implemented by `src/parser/parser.y`. Its core is exactly the language in section 5 of the lab manual. On top of that it allows:
 
 - the Java spellings `boolean` and `System.out.println(...)`,
-- an optional class/main wrapper,
+- a class/main wrapper, which is required unless `--manual` is given (with `--manual`, a bare list of statements, exactly as in the manual, is also accepted),
 - the bonus statements of manual section 14: `for`, `do-while`, `switch`, `break`, `++` and `--`.
 
 ## Context-free grammar (BNF)
@@ -11,7 +11,7 @@ This is the context-free grammar implemented by `src/parser/parser.y`. Its core 
 `ε` is the empty string. Terminals are quoted or written in capitals.
 
 ```text
-<program>      ::= <stmt-list>
+<program>      ::= <stmt-list>                     (only with --manual)
                  | "class" IDENT "{" "public" "static" "void" "main"
                    "(" "String" "[" "]" IDENT ")" <block> "}"
 
