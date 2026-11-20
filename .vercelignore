@@ -1,8 +1,0 @@
-# Not needed by the deployment (the frontend is rebuilt by buildCommand).
-.git
-.claude
-frontend/node_modules
-frontend/dist
-server/.venv
-backend/*/build
-**/__pycache__

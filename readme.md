@@ -109,18 +109,16 @@ server/     FastAPI; runs the .exe files in backend/*/build/ once per phase
 
 `npm run build` writes `frontend/dist/`; when that folder exists the server also serves the UI itself at http://localhost:8000, so only step 2 is needed.
 
-### Deploy to Vercel
+### Deploy with Docker (Render)
 
-Vercel runs Linux, so the site uses static Linux builds of the three compilers in `server/bin/linux/` (generated files: do not edit them). `app.py` at the repository root is the entry point Vercel loads, and `vercel.json` builds the frontend and bundles the UI, the server, the Linux compilers and the example programs into one Python function.
+The `Dockerfile` builds everything from source in three stages: the React UI, the three compilers (linked statically, then every test suite is run, so a failing test stops the deploy), and a slim Python image that runs the server as an unprivileged user. Run it locally with Docker:
 
-1. After changing any compiler, rebuild and test the Linux binaries (on Linux or in WSL; needs `sudo apt install build-essential flex bison`), then commit them:
+```sh
+docker build -t tricora .
+docker run -p 8000:8000 tricora        # then open http://localhost:8000
+```
 
-   ```sh
-   bash scripts/build-linux-binaries.sh
-   bash scripts/test-linux-binaries.sh
-   ```
-
-2. Import the GitHub repository at https://vercel.com/new (no settings to change), or deploy from this folder with `npx vercel --prod`. Every push to the connected branch redeploys.
+To put it online for free on [Render](https://render.com): sign in with GitHub, choose **New -> Blueprint**, and pick this repository. `render.yaml` creates one free web service that builds the `Dockerfile` from the `master` branch and redeploys on every push. The free plan sleeps after about 15 minutes without visitors, so the first visit after that takes 30-60 seconds.
 
 API: `GET /api/languages`, `GET /api/examples/{lang}`, `GET /api/examples/{lang}/file?path=...`, `POST /api/compile` with `{language, source, options, stdin}`.
 
