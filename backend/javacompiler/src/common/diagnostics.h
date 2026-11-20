@@ -9,4 +9,4 @@
 
 extern int lexicalErrors;   // defined in lexer.l
 extern int syntaxErrors;    // defined in parser.y
-extern bool manualMode;     // defined in parser.y; set by --manual
+extern bool manualMode;     // defined in parser.y; true unless --strict

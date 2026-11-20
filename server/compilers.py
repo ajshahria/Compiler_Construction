@@ -68,7 +68,7 @@ COMPILERS: dict[str, Compiler] = {
             ASM,
             RUN,
         ],
-        allowed_options=["--manual", "--allow-no-header", "--allow-no-main"],
+        allowed_options=["--strict"],
         default_example="examples/headers_demo.cpp",
         reads_input=True,
     ),
@@ -80,7 +80,7 @@ COMPILERS: dict[str, Compiler] = {
         extension=".java",
         monaco="java",
         phases=[TOKENS, AST, SYMTAB, TAC, OPT, ASM, RUN],
-        allowed_options=["--manual"],
+        allowed_options=["--strict"],
         default_example="examples/Example.java",
     ),
 }

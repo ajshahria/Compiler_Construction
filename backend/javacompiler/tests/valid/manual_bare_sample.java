@@ -1,4 +1,3 @@
-// flags: --manual
 // The sample program of manual section 5.5 exactly as written: no class.
 int x;
 int y;

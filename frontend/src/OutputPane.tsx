@@ -48,13 +48,12 @@ export function OutputPane(p: Props) {
       <div className="pane-title">
         <span>{p.language.name}</span>
       </div>
-      <div className="toolbar">
-        <span className="compiler-name">{p.language.name}</span>
-        <div className="options">
-          {p.language.options.length === 0 ? (
-            <span className="muted">No compiler options</span>
-          ) : (
-            p.language.options.map((o) => (
+      {/* Option chips; a compiler with no options (C) gets no toolbar at all. */}
+      {p.language.options.length > 0 && (
+        <div className="toolbar">
+          <span className="compiler-name">{p.language.name}</span>
+          <div className="options">
+            {p.language.options.map((o) => (
               <button
                 key={o}
                 className={`chip ${p.options.includes(o) ? "on" : ""}`}
@@ -63,10 +62,10 @@ export function OutputPane(p: Props) {
               >
                 {o}
               </button>
-            ))
-          )}
+            ))}
+          </div>
         </div>
-      </div>
+      )}
       <div className="tabs" role="tablist">
         {p.tabs.map((t) => {
           const ok = supported.has(t.id);

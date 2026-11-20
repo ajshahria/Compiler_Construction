@@ -2,6 +2,16 @@
 
 This repository is a university course project for Compiler Construction. The goal of this project is to build a simple compiler system capable of compiling C, C++, and Java programs through the main phases of a compiler: lexical analysis, syntax analysis, semantic analysis, intermediate code generation, optimization, and code generation.
 
+> **Required language.** All three compilers implement the fixed mini language of the lab manual (section 5: `int`/`float`/`bool`, `if`/`else`, `while`, `print`, nested blocks). A program written exactly as in the manual, for example its sample program in section 5.5, compiles to Three Address Code with each of them **with no flags**:
+>
+> ```bash
+> backend/c-compiler/build/tricora     program.txt
+> backend/c++_compiler/build/compiler.exe program.txt
+> backend/javacompiler/build/minijavac program.txt
+> ```
+>
+> The C, C++ and Java syntax each compiler also accepts (`int main()`, `cout`, `class Main`, `System.out.println`, ...) is an extension on top of that language. `--strict` makes the C++ and Java compilers require their full C++ or Java program form.
+
 ## Project Overview
 
 A compiler translates source code written in a high-level programming language into executable or intermediate code. In this project, we aim to understand how compilers work by implementing a simplified version for three widely used languages: C, C++, and Java.
@@ -167,7 +177,7 @@ It implements all six phases; the web UI above shows each one in its own tab.
 cd backend/c++_compiler                # all C++ compiler files live here
 make                                   # builds build/compiler.exe (needs g++, flex, bison)
 build/compiler.exe examples/headers_demo.cpp # prints TAC (default)
-build/compiler.exe --manual --all examples/sample.cpp   # the manual's sample needs --manual
+build/compiler.exe --all tests/valid/manual_sample_no_header.cpp   # the manual's language: no flags needed
 make test                              # runs every program in tests/ against its .expected file
 ```
 
@@ -205,7 +215,7 @@ The lexer recognises `#include <header>` lines and `using namespace std;` (`src/
 All C++ standard headers (`<iostream>`, `<vector>`, `<cmath>`, `<cstdlib>`, ... up to C++23, plus `<stdio.h>`-style C headers
 and `<bits/stdc++.h>`) are accepted and listed with `--headers`. Rules:
 
-- Every program must start with `#include <iostream>` (error `missing required header` otherwise), and `#include` lines must be at the top of the file. `--allow-no-header` relaxes the first rule. Every program must also define `int main()` (error otherwise); `--manual` relaxes both rules for the lab manual sample.
+- A file with no `#include` and no `main` is the lab manual's language (section 5.5) and compiles with no flags. Every other program must start with `#include <iostream>` (error `missing required header` otherwise), and `#include` lines must be at the top of the file. `--allow-no-header` relaxes the first rule. Such a program must also define `int main()` (error otherwise); `--manual` relaxes both rules, and `--strict` enforces both even for a manual-style file.
 - `cout << x << endl;` (or `std::cout`) needs `<iostream>`.
 - An unknown header (`<notaheader>`) or a quoted user header (`"file.h"`) is a lexical error with its line number.
 - Other headers are accepted but have no effect, because the language has no library calls yet.

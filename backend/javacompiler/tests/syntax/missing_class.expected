@@ -1,3 +1,3 @@
 exit 1
-line 2: syntax error: a program must be 'class Name { public static void main(String[] args) { ... } }' (use --manual for the lab manual's form without a class)
+line 3: syntax error: a program must be 'class Name { public static void main(String[] args) { ... } }' (the lab manual's form without a class is rejected because of --strict)
 Compilation failed: 0 lexical error(s), 1 syntax error(s).

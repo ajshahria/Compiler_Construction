@@ -1,6 +1,6 @@
 # MiniJava Compiler
 
-A compiler front-end for the lab manual's mini language, written in C++ with Flex and Bison. A program must be a `class` with `main` (with `--manual`, a program without a class, exactly as in the manual, is also accepted); inside it, statements can be written exactly as in the manual (`bool`, `print x;`) or in Java style (`boolean`, `System.out.println(x);`). Its front end produces Three Address Code, the output the manual requires; an extra back end can then optimize the TAC, translate it to x86 assembly, or run it:
+A compiler front-end for the lab manual's mini language, written in C++ with Flex and Bison. A program is either a bare list of statements, exactly as in the manual's sample program, or a `class` with `main` (`--strict` accepts only the class form); inside it, statements can be written exactly as in the manual (`bool`, `print x;`) or in Java style (`boolean`, `System.out.println(x);`). Its front end produces Three Address Code, the output the manual requires; an extra back end can then optimize the TAC, translate it to x86 assembly, or run it:
 
 ```text
 source (.java) -> lexer -> parser/AST -> semantic analysis (symbol table) -> Three Address Code
@@ -52,7 +52,7 @@ make
 
 ```sh
 ./build/minijavac tests/valid/manual_sample.java        # Three Address Code (default)
-./build/minijavac --manual tests/valid/manual_bare_sample.java   # the manual's sample, no class
+./build/minijavac tests/valid/manual_bare_sample.java   # the manual's sample, no class
 ./build/minijavac --all examples/Example.java           # every phase
 ./build/minijavac examples/Example.java -o out.tac      # write the output to a file
 make run                                                # --all on examples/Example.java
@@ -69,7 +69,8 @@ make run                                                # --all on examples/Exam
 | `--run` | run the program with the TAC interpreter and print its output |
 | `--all` | all of the above |
 | `-o file` | write the output to a file |
-| `--manual` | also accept a program without a class, exactly as in the lab manual's sample (section 5.5) |
+| `--strict` | accept only the `class Name { public static void main(...) { ... } }` form; a bare list of statements is a syntax error |
+| `--manual` | accept a program without a class, exactly as in the lab manual's sample (section 5.5); this is the default and the flag is kept for compatibility |
 | `--emit-files` | also write `ast.txt`, `symbols.txt` and `output.tac` (one file per phase) |
 
 Exit status: `0` compiled, `1` errors in the program (or, with `--run`, a runtime error such as division by zero), `2` usage or file problem. Errors are printed as `line N: <lexical|syntax|semantic> error: <description>`.
@@ -81,7 +82,7 @@ make test                        # run every test
 sh tests/run_tests.sh --update   # regenerate the .expected files after an intended change
 ```
 
-Each `tests/<category>/<name>.java` has a matching `<name>.expected` file. Its first line is the exit status; the rest is the compiler's output. A test can pass compiler options on its first line (`// flags: --manual`).
+Each `tests/<category>/<name>.java` has a matching `<name>.expected` file. Its first line is the exit status; the rest is the compiler's output. A test can pass compiler options on its first line (`// flags: --strict`).
 
 | Folder | Programs |
 |---|---|

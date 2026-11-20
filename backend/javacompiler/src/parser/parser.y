@@ -5,8 +5,8 @@
  * wrapped in a Java class with a main method:
  *         class Name { public static void main(String[] args) { ... } }
  * A bare list of statements, exactly as in the manual's sample program
- * (section 5.5), is accepted only with --manual; without it, it is a syntax
- * error, so C or C++ code is not accepted as Java by default.
+ * (section 5.5), is accepted too: that is the required language of the lab
+ * manual. With --strict only the class form is accepted.
  *
  * Both `print x;` and `System.out.println(x);` print a value, and both
  * `bool` and `boolean` name the boolean type. for, do-while, switch and ++/--
@@ -35,7 +35,7 @@ void yyerror(const char* message);
 
 Node* syntaxRoot = nullptr;   // the finished AST
 int syntaxErrors = 0;         // number of syntax errors reported
-bool manualMode = false;      // --manual: also accept a bare list of statements
+bool manualMode = true;       // accept the lab manual's bare list of statements (--strict turns it off)
 
 /* Appends a statement to a block node. */
 static Node* append(Node* block, Node* statement) {
@@ -100,7 +100,7 @@ program
             if (!manualMode) {
                 std::fprintf(stderr, "line %d: syntax error: a program must be "
                              "'class Name { public static void main(String[] args) { ... } }' "
-                             "(use --manual for the lab manual's form without a class)\n", $1->line);
+                             "(the lab manual's form without a class is rejected because of --strict)\n", $1->line);
                 ++syntaxErrors;
             }
             syntaxRoot = makeNode("program", "", 1, $1);
