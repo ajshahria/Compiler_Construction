@@ -12,6 +12,15 @@ import {
 import { EditorPane } from "./EditorPane";
 import { OutputPane } from "./OutputPane";
 
+/** True if the source reads input with `cin >>` (ignoring comments and string literals). */
+function readsInput(source: string): boolean {
+  const code = source
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/\/\/.*$/gm, " ")
+    .replace(/"(?:\\.|[^"\\\n])*"/g, '""');
+  return /\bcin\s*>>/.test(code);
+}
+
 type IEditor = Parameters<OnMount>[0];
 
 /* The browser's "Save as" dialog (File System Access API, Chrome and Edge). */
@@ -79,6 +88,9 @@ export default function App() {
   useEffect(() => save("ce.lang", lang), [lang]);
   useEffect(() => save("ce.sources", sources), [sources]);
   useEffect(() => save("ce.stdin", stdin), [stdin]);
+
+  // Show the input box (and send its text) only when the program reads input with `cin >>`.
+  const needsInput = !!language?.input && source !== undefined && readsInput(source);
   useEffect(() => save("ce.split", split), [split]);
   useEffect(() => save("ce.fileNames", fileNames), [fileNames]);
 
@@ -97,7 +109,7 @@ export default function App() {
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setBusy(true);
-    compile({ language: language.id, source, options: [], stdin }, ctrl.signal)
+    compile({ language: language.id, source, options: [], stdin: needsInput ? stdin : "" }, ctrl.signal)
       .then((r) => {
         setResult(r);
         setFailure("");
@@ -110,7 +122,7 @@ export default function App() {
       .finally(() => {
         if (abortRef.current === ctrl) setBusy(false);
       });
-  }, [language, source, stdin]);
+  }, [language, source, stdin, needsInput]);
 
   compileRef.current = runCompile;
 
@@ -297,6 +309,7 @@ export default function App() {
             result={result}
             failure={failure}
             busy={busy}
+            needsInput={needsInput}
             stdin={stdin}
             onStdin={setStdin}
             onJump={jump}

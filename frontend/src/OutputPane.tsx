@@ -9,6 +9,7 @@ interface Props {
   result: CompileResult | null;
   failure: string;
   busy: boolean;
+  needsInput: boolean;
   stdin: string;
   onStdin: (s: string) => void;
   onJump: (e: CompileError) => void;
@@ -109,7 +110,7 @@ export function OutputPane(p: Props) {
         )}
       </div>
 
-      {p.tab === "run" && p.language.input && (
+      {p.tab === "run" && p.needsInput && (
         <div className="stdin">
           <label htmlFor="stdin">Program input (cin)</label>
           <textarea
