@@ -9,6 +9,7 @@ export interface Language {
   options: string[];
   built: boolean;
   defaultExample: string;
+  input: boolean;   // the language can read input (cin)
 }
 
 export interface LanguagesResponse {

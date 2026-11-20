@@ -1,7 +1,8 @@
 #!/bin/sh
 # run_tests.sh - runs the compiler on every tests/<category>/*.tri program and
 # compares the combined output (stdout + error messages) and exit status with
-# the matching .expected file.
+# the matching .expected file. A test can set compiler options on its first
+# line, e.g.  // flags: --run
 #
 #   sh tests/run_tests.sh            check all tests (also: make test)
 #   sh tests/run_tests.sh --update   regenerate every .expected file
@@ -26,7 +27,9 @@ pass=0
 fail=0
 for src in tests/valid/*.tri tests/lexical/*.tri tests/syntax/*.tri tests/semantic/*.tri; do
     expected="${src%.tri}.expected"
-    actual=$("$BIN" "$src" 2>&1; echo "exit $?")
+    # A test can pass compiler options on its first line:  // flags: --run
+    flags=$(sed -n '1s#^// *flags: *##p' "$src" | tr -d '\r')
+    actual=$("$BIN" $flags "$src" 2>&1; echo "exit $?")
     # Put the exit status first and drop Windows line endings.
     actual=$(printf '%s\n' "$actual" | tr -d '\r' | sed -n '$p'; printf '%s\n' "$actual" | tr -d '\r' | sed '$d')
 

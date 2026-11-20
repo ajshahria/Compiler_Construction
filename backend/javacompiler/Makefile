@@ -27,7 +27,8 @@ SOURCES := $(SRC_DIR)/main.cpp \
            $(SRC_DIR)/ast/ast.cpp \
            $(SRC_DIR)/semantic/semantic.cpp \
            $(SRC_DIR)/symbol_table/symbol_table.cpp \
-           $(SRC_DIR)/codegen/tac.cpp
+           $(SRC_DIR)/codegen/tac.cpp \
+           $(SRC_DIR)/backend/backend.cpp
 HEADERS := $(wildcard $(SRC_DIR)/*/*.h)
 
 .PHONY: all clean run test

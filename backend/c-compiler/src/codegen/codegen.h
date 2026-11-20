@@ -12,4 +12,7 @@
  * program that passed semantic analysis. */
 void generate_tac(StmtList *program, FILE *out);
 
+/* The same TAC as text, for the back end (caller frees). */
+char *generate_tac_text(StmtList *program);
+
 #endif

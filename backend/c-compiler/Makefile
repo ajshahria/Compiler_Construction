@@ -16,14 +16,15 @@ EXE := .exe
 endif
 TARGET := $(BUILD)/tricora$(EXE)
 
-INCLUDES := -Isrc -Isrc/ast -Isrc/symbol_table -Isrc/semantic -Isrc/codegen -I$(BUILD)
+INCLUDES := -Isrc -Isrc/ast -Isrc/symbol_table -Isrc/semantic -Isrc/codegen -Isrc/backend -I$(BUILD)
 CFLAGS   := -std=gnu99 -Wall -g $(INCLUDES)
 
 SOURCES := src/main.c \
            src/ast/ast.c \
            src/symbol_table/symbol_table.c \
            src/semantic/semantic.c \
-           src/codegen/codegen.c
+           src/codegen/codegen.c \
+           src/backend/backend.c
 
 GENERATED := $(BUILD)/parser.tab.c $(BUILD)/lex.yy.c
 HEADERS   := $(wildcard src/*/*.h)

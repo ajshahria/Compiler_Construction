@@ -124,7 +124,7 @@ export function OutputPane(p: Props) {
         )}
       </div>
 
-      {p.tab === "run" && (
+      {p.tab === "run" && p.language.input && (
         <div className="stdin">
           <label htmlFor="stdin">Program input (cin)</label>
           <textarea

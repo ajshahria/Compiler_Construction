@@ -34,6 +34,8 @@ ERROR_LINE_FIRST = re.compile(r"^line (\d+):\s*(\w+) error:\s*(.*)$", re.I)
 # "Syntax error [line 7]: statement outside of main(): ..."  (C++)
 ERROR_KIND_FIRST = re.compile(r"^(\w+) error \[line (\d+)\]:\s*(.*)$", re.I)
 SUMMARY = re.compile(r"^compilation failed", re.I)
+# "Runtime error: division by zero"                          (--run, all three)
+RUNTIME = re.compile(r"^runtime error:\s*(.*)$", re.I)
 SECTION_HEADER = re.compile(r"^=== .* ===\s*$")
 
 
@@ -61,6 +63,8 @@ def parse_errors(stderr: str) -> tuple[list[dict], str]:
             errors.append({"line": int(m[1]), "kind": m[2].lower(), "message": m[3]})
         elif m := ERROR_KIND_FIRST.match(line):
             errors.append({"line": int(m[2]), "kind": m[1].lower(), "message": m[3]})
+        elif m := RUNTIME.match(line):
+            errors.append({"line": None, "kind": "runtime", "message": m[1]})
         elif SUMMARY.match(line):
             summary = line
         else:
@@ -104,6 +108,7 @@ def languages():
                 "options": c.allowed_options,
                 "built": c.exe.exists(),
                 "defaultExample": c.default_example,
+                "input": c.reads_input,
             }
             for c in COMPILERS.values()
         ],

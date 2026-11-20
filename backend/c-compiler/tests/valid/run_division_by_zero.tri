@@ -1,0 +1,11 @@
+// flags: --run
+// A valid program that fails while running: the output printed before the
+// error is kept, then the run stops with a runtime error (exit status 1).
+int a;
+int z;
+
+a = 5;
+z = 0;
+print a;
+print a / z;
+print a;
