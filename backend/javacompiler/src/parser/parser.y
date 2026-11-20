@@ -4,8 +4,9 @@
  * A program is the statements of the lab manual's language (section 5)
  * wrapped in a Java class with a main method:
  *         class Name { public static void main(String[] args) { ... } }
- * A bare list of statements is rejected, so C or C++ code is not accepted
- * as Java.
+ * A bare list of statements, exactly as in the manual's sample program
+ * (section 5.5), is accepted only with --manual; without it, it is a syntax
+ * error, so C or C++ code is not accepted as Java by default.
  *
  * Both `print x;` and `System.out.println(x);` print a value, and both
  * `bool` and `boolean` name the boolean type. for, do-while, switch and ++/--
@@ -33,6 +34,7 @@ void yyerror(const char* message);
 
 Node* syntaxRoot = nullptr;   // the finished AST
 int syntaxErrors = 0;         // number of syntax errors reported
+bool manualMode = false;      // --manual: also accept a bare list of statements
 
 /* Appends a statement to a block node. */
 static Node* append(Node* block, Node* statement) {
@@ -92,7 +94,17 @@ static Node* declaration(const char* type, char* name, Node* init, int line) {
 %%
 
 program
-    : CLASS IDENT '{' PUBLIC STATIC VOID MAIN '(' STRING '[' ']' IDENT ')' block '}'
+    : statements
+        {
+            if (!manualMode) {
+                std::fprintf(stderr, "line %d: syntax error: a program must be "
+                             "'class Name { public static void main(String[] args) { ... } }' "
+                             "(use --manual for the lab manual's form without a class)\n", $1->line);
+                ++syntaxErrors;
+            }
+            syntaxRoot = makeNode("program", "", 1, $1);
+        }
+    | CLASS IDENT '{' PUBLIC STATIC VOID MAIN '(' STRING '[' ']' IDENT ')' block '}'
         { syntaxRoot = makeNode("program", $2, @1.first_line, $14); std::free($2); std::free($12); }
     ;
 
@@ -204,11 +216,7 @@ void yyerror(const char* message) {
     if (std::strncmp(message, prefix, std::strlen(prefix)) == 0)
         message += std::strlen(prefix);
 
-    if (std::strstr(message, "expecting CLASS") != nullptr)
-        std::fprintf(stderr, "line %d: syntax error: %s (a program must be "
-                     "'class Name { public static void main(String[] args) { ... } }')\n",
-                     yylloc.first_line, message);
-    else if (previousToken != 0 && yylloc.first_line > previousTokenLine && !previousLineComplete)
+    if (previousToken != 0 && yylloc.first_line > previousTokenLine && !previousLineComplete)
         std::fprintf(stderr, "line %d: syntax error: %s on line %d (missing ';' at the end of line %d?)\n",
                      previousTokenLine, message, yylloc.first_line, previousTokenLine);
     else

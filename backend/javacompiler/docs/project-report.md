@@ -35,7 +35,7 @@ During the semester the compiler phases were studied separately. This project jo
 
 **Operators:** `+ - * / %`, `< > <= >= == !=`, `&& || !`, unary `-`.
 
-**Program form:** the manual's statements inside `class Name { public static void main(String[] args) { ... } }`. A bare list of statements is a syntax error, so C or C++ programs are not accepted as Java.
+**Program form:** the manual's statements inside `class Name { public static void main(String[] args) { ... } }`. By default a bare list of statements is a syntax error, so C or C++ programs are not accepted as Java. With `--manual` the compiler also accepts the manual's sample program exactly as written in section 5.5, with no class, so the fixed language of section 3 is always supported.
 
 The complete CFG, precedence table and lexical rules are in [`language-grammar.md`](language-grammar.md).
 
@@ -64,7 +64,7 @@ The complete CFG, precedence table and lexical rules are in [`language-grammar.m
  TAC generator    (src/codegen/) --> Three Address Code
 ```
 
-The driver, `src/main.cpp`, runs the phases in order and stops after the first phase that reports an error. Bison calls `yylex()` whenever it needs a token, so lexing and parsing run together. The semantic analyzer annotates each variable node with its unique TAC name, and the generator uses that name. The options `--tokens`, `--ast`, `--symtab`, `--tac` and `--all` show each phase's output. `--emit-files` writes `ast.txt`, `symbols.txt` and `output.tac`, which the GUI (`ui/main.cpp`) shows in separate tabs; the GUI can also execute the TAC.
+The driver, `src/main.cpp`, runs the phases in order and stops after the first phase that reports an error. Bison calls `yylex()` whenever it needs a token, so lexing and parsing run together. The semantic analyzer annotates each variable node with its unique TAC name, and the generator uses that name. The options `--tokens`, `--ast`, `--symtab`, `--tac` and `--all` show each phase's output. `--emit-files` writes `ast.txt`, `symbols.txt` and `output.tac`, one file per phase. The project's web UI (`frontend/` and `server/` at the repository root) shows every phase in its own tab.
 
 ## 5. Lexer design
 
@@ -173,7 +173,7 @@ All variables share one namespace in TAC. When a declaration reuses a name that 
 
 ## 12. Testing
 
-`make test` runs `tests/run_tests.sh`. It compiles each `tests/<category>/*.java` file and compares the output and exit status with `<name>.expected`. Current result: **24 passed, 0 failed**.
+`make test` runs `tests/run_tests.sh`. It compiles each `tests/<category>/*.java` file and compares the output and exit status with `<name>.expected`. A test can pass compiler options on its first line (`// flags: --manual`). Current result: **26 passed, 0 failed**.
 
 | Category | Programs |
 |---|---|
@@ -186,7 +186,7 @@ All variables share one namespace in TAC. When a declaration reuses a name that 
 **[Screenshot]** `make test` with every test passing.
 **[Screenshot]** `--all` on `tests/valid/manual_sample.java`.
 **[Screenshot]** one lexical, one syntax and one semantic error.
-**[Screenshot]** the GUI (`make ui`) showing the AST, symbol table and TAC tabs.
+**[Screenshot]** the web UI showing the AST, symbol table and TAC tabs.
 
 ## 13. Conclusion
 

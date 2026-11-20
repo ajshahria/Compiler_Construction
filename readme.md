@@ -148,7 +148,7 @@ This repository is planned as a simple but functional compiler construction proj
 
 A Flex/Bison compiler written in C++ for the fixed mini language of the lab manual
 (`int`/`float`/`bool`, `if`/`else`, `while`, `print`, nested scopes) plus C++-style extras.
-It implements all six phases and ships a small UI.
+It implements all six phases; the web UI above shows each one in its own tab.
 
 ## Build and run
 
@@ -158,7 +158,6 @@ make                                   # builds build/compiler.exe (needs g++, f
 build/compiler.exe examples/headers_demo.cpp # prints TAC (default)
 build/compiler.exe --manual --all examples/sample.cpp   # the manual's sample needs --manual
 make test                              # runs every program in tests/ against its .expected file
-python ui/compiler_ui.py               # GUI: editor + one tab per phase
 ```
 
 | Flag | Output |

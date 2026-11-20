@@ -67,6 +67,7 @@ COMPILERS: dict[str, Compiler] = {
         extension=".java",
         monaco="java",
         phases=[TOKENS, AST, SYMTAB, TAC],
+        allowed_options=["--manual"],
         default_example="examples/Example.java",
     ),
 }

@@ -35,21 +35,19 @@ c++_compiler/
 │   ├── cpp_extras.cpp           for, ++/--, compound assignment, cout
 │   ├── headers_demo.cpp         standard headers, using namespace std, endl
 │   └── demo_programs.py         writes build/demo.html: several programs, one tab per phase
-├── tests/
-│   ├── run_tests.sh             runs every test and compares it with its .expected file
-│   ├── valid/                   23 programs that compile and run
-│   ├── lexical/                 7 programs with lexical errors
-│   ├── syntax/                  9 programs with syntax errors
-│   └── semantic/                9 programs with semantic errors
-└── ui/
-    └── compiler_ui.py           Tkinter GUI: editor + one tab per phase
+└── tests/
+    ├── run_tests.sh             runs every test and compares it with its .expected file
+    ├── valid/                   23 programs that compile and run
+    ├── lexical/                 7 programs with lexical errors
+    ├── syntax/                  9 programs with syntax errors
+    └── semantic/                9 programs with semantic errors
 ```
 
 `make` writes everything it generates to `build/` (the parser and lexer sources, object files, `compiler.exe`). That folder is not committed.
 
 ## Requirements
 
-`g++` (C++11 or newer), `flex`, `bison` and `make`. On Windows, use MinGW/MSYS and run the commands in Git Bash. The GUI also needs Python 3 with Tkinter. Tested with GCC 6.3, Flex 2.5.35, Bison 2.4.2 and GNU Make 3.81.
+`g++` (C++11 or newer), `flex`, `bison` and `make`. On Windows, use MinGW/MSYS and run the commands in Git Bash. Tested with GCC 6.3, Flex 2.5.35, Bison 2.4.2 and GNU Make 3.81.
 
 ## Build
 
@@ -65,7 +63,6 @@ build/compiler.exe --manual --all examples/sample.cpp      # every phase (manual
 build/compiler.exe --opt --run examples/floats.cpp         # optimized TAC, then run it
 build/compiler.exe --manual -o build/out.s examples/sample.cpp   # write x86 assembly
 gcc build/out.s -o build/out.exe                           # assemble it (MinGW)
-python ui/compiler_ui.py                                   # GUI
 python examples/demo_programs.py                           # build/demo.html
 ```
 

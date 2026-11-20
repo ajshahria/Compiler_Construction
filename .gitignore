@@ -19,15 +19,11 @@ parser.output
 *.tac
 *.asm
 *.s
-# written by the MiniJava compiler with --emit-files (for its GUI)
+# written by the MiniJava compiler with --emit-files
 backend/javacompiler/ast.txt
 backend/javacompiler/symbols.txt
 
-# ----- temporary files of the MiniJava Windows GUI -----
-.compiler_ui_input.java
-.compiler_ui_output.txt
-
-# ----- Python (C++ compiler GUI) -----
+# ----- Python (web UI server) -----
 __pycache__/
 *.py[cod]
 
