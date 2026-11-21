@@ -89,8 +89,10 @@ export default function App() {
   useEffect(() => save("ce.sources", sources), [sources]);
   useEffect(() => save("ce.stdin", stdin), [stdin]);
 
-  // Show the input box (and send its text) only when the program reads input with `cin >>`.
+  // The program reads input with `cin >>`: only then is the input text sent.
   const needsInput = !!language?.input && source !== undefined && readsInput(source);
+  // The input box appears only after Compile, and only if the compiled code reads input.
+  const [showInput, setShowInput] = useState(false);
   useEffect(() => save("ce.split", split), [split]);
   useEffect(() => save("ce.fileNames", fileNames), [fileNames]);
 
@@ -109,6 +111,7 @@ export default function App() {
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setBusy(true);
+    setShowInput(needsInput);
     compile({ language: language.id, source, options: [], stdin: needsInput ? stdin : "" }, ctrl.signal)
       .then((r) => {
         setResult(r);
@@ -135,6 +138,7 @@ export default function App() {
     setBusy(false);
     setResult(null);
     setFailure("");
+    setShowInput(false);
   };
 
   useEffect(clearOutput, [language?.id]);
@@ -309,7 +313,7 @@ export default function App() {
             result={result}
             failure={failure}
             busy={busy}
-            needsInput={needsInput}
+            needsInput={showInput}
             stdin={stdin}
             onStdin={setStdin}
             onJump={jump}
