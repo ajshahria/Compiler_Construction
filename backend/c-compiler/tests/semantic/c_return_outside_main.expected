@@ -1,0 +1,3 @@
+exit 1
+line 4: semantic error: 'return' outside of main()
+Compilation failed: 1 semantic error(s).

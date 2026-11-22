@@ -1,0 +1,9 @@
+// C style (bonus): an unknown header, a user header, another preprocessor
+// directive and an unsupported escape sequence are lexical errors.
+#include <conio.h>
+#include "mine.h"
+#define X 1
+int main() {
+    printf("bad \q");
+    return 0;
+}

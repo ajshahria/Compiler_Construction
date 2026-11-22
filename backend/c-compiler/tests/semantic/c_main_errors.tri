@@ -1,0 +1,8 @@
+// C style (bonus): a statement outside main(), main defined twice, and a function
+// other than main (functions are not supported).
+#include <stdio.h>
+int x;
+x = 5;
+int main() { return 0; }
+int main() { return 0; }
+int helper() { return 0; }

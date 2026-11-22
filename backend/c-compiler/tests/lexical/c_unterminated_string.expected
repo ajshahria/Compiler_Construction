@@ -1,0 +1,4 @@
+exit 1
+line 4: lexical error: unterminated string literal '"open);'
+line 4: syntax error: unexpected RETURN, expecting STRING_LITERAL on line 5 (missing ';' at the end of line 4?)
+Compilation failed: 1 lexical error(s), 1 syntax error(s).

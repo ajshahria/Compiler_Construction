@@ -9,7 +9,13 @@
  *     ifFalse t3 goto L1    conditional jump
  *     goto L2               unconditional jump
  *     L1:                   label
- *     print x               output
+ *     print x               output (the manual's print statement)
+ *
+ * C style printf (bonus) is split into output instructions:
+ *     outs "text"           print literal text (C escapes such as \n kept)
+ *     out x                 print a value: int and bool as %d, float as %g
+ *     outf x 2              print a float with 2 digits after the point (%.2f; %f is 6)
+ * and `return` in main() jumps to a label at the end of main.
  *
  * Variables use the unique TAC name picked by the symbol table, so a
  * variable that shadows an outer one (x and x@3) never shares its storage.
@@ -41,6 +47,7 @@ static char *code;
 static size_t code_length, code_capacity;
 static int temp_count;
 static int label_count;
+static int return_label;     /* label at the end of main(); 0 until a return needs it */
 
 /* Appends one formatted TAC line to the code. */
 static void emit(const char *format, ...)
@@ -140,6 +147,40 @@ static void gen_assignment(const char *name, Expr *value)
     free(address);
 }
 
+/* printf("a=%d\n", a) -> outs "a="; out a; outs "\n" */
+static void gen_printf(Stmt *s)
+{
+    const char *format = s->as.printf_stmt.format;
+    ExprList *args = s->as.printf_stmt.args;
+    char *text = malloc(strlen(format) + 1);    /* literal text waiting to be printed */
+    size_t text_length = 0, pos = 0, next_arg = 0;
+    FormatPiece piece;
+    if (text == NULL) {
+        perror("out of memory");
+        exit(2);
+    }
+    while (format_next(format, &pos, &piece) > 0) {
+        if (!piece.is_conversion) {
+            memcpy(text + text_length, piece.text, piece.length);
+            text_length += piece.length;
+            continue;
+        }
+        if (text_length > 0) {
+            emit("outs \"%.*s\"\n", (int)text_length, text);
+            text_length = 0;
+        }
+        char *address = gen_expr(args->items[next_arg++]);
+        if (piece.conversion == 'f')
+            emit("outf %s %d\n", address, piece.precision < 0 ? 6 : piece.precision);
+        else
+            emit("out %s\n", address);       /* %d %i, and %g (a float prints as %g) */
+        free(address);
+    }
+    if (text_length > 0)
+        emit("outs \"%.*s\"\n", (int)text_length, text);
+    free(text);
+}
+
 static void gen_list(StmtList *list);
 
 static void gen_stmt(Stmt *s)
@@ -200,6 +241,22 @@ static void gen_stmt(Stmt *s)
         gen_list(s->as.block);
         break;
 
+    case ST_FUNCTION:               /* main(): its body is the program */
+        gen_list(s->as.function.body);
+        if (return_label)
+            emit("L%d:\n", return_label);
+        break;
+
+    case ST_RETURN:                 /* the value of main() is not used */
+        if (!return_label)
+            return_label = new_label();
+        emit("goto L%d\n", return_label);
+        break;
+
+    case ST_PRINTF:
+        gen_printf(s);
+        break;
+
     case ST_ERROR:
         break;
     }
@@ -217,6 +274,7 @@ char *generate_tac_text(StmtList *program)
     code_length = code_capacity = 0;
     temp_count = 0;
     label_count = 0;
+    return_label = 0;
     emit("%s", "");           /* an empty program still gets an empty string */
     gen_list(program);
     return code;

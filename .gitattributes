@@ -5,3 +5,5 @@
 *.l text eol=lf
 *.y text eol=lf
 Makefile text eol=lf
+# a test that must keep Windows (CRLF) line endings
+backend/c-compiler/tests/valid/run_c_crlf_includes.tri text eol=crlf

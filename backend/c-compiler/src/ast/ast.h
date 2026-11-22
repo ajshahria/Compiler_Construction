@@ -59,6 +59,9 @@ typedef enum {
     ST_IF,       /* If / IfElse                        */
     ST_WHILE,    /* While                              */
     ST_BLOCK,    /* Block    : { ... } (new scope)     */
+    ST_FUNCTION, /* Function : int main() { ... }   (C style, bonus) */
+    ST_RETURN,   /* Return   : return e;            (C style, bonus) */
+    ST_PRINTF,   /* Printf   : printf("...", e, ...); (C style, bonus) */
     ST_ERROR     /* placeholder left by syntax-error recovery */
 } StmtKind;
 
@@ -70,6 +73,12 @@ typedef struct {
     size_t count, capacity;
 } StmtList;
 
+/* Growable list of expressions (the arguments of printf). */
+typedef struct {
+    Expr **items;
+    size_t count, capacity;
+} ExprList;
+
 struct Stmt {
     StmtKind kind;
     int line;
@@ -80,6 +89,9 @@ struct Stmt {
         struct { Expr *cond; Stmt *then_branch, *else_branch; } if_stmt;
         struct { Expr *cond; Stmt *body; } while_stmt;
         StmtList *block;
+        struct { Type type; char *name; StmtList *body; } function;
+        Expr *ret;                                    /* NULL for `return;` */
+        struct { char *format; ExprList *args; } printf_stmt;   /* format: text between the quotes, escapes kept */
     } as;
 };
 
@@ -98,13 +110,36 @@ Stmt *ast_if(Expr *cond, Stmt *then_branch, Stmt *else_branch, int line);
 Stmt *ast_while(Expr *cond, Stmt *body, int line);
 Stmt *ast_block(StmtList *body, int line);
 Stmt *ast_error(int line);
+Stmt *ast_function(Type type, char *name, StmtList *body, int line);
+Stmt *ast_return(Expr *value, int line);
+Stmt *ast_printf(char *format, ExprList *args, int line);
 
 StmtList *ast_list_new(void);
 StmtList *ast_list_append(StmtList *list, Stmt *stmt);
+ExprList *ast_expr_list_new(void);
+ExprList *ast_expr_list_append(ExprList *list, Expr *expr);
 
 /* Helpers. */
 const char *type_name(Type type);
 const char *operator_symbol(Operator op);
+
+/* #include headers seen by the lexer (C style). */
+int header_included(const char *name);
+
+/* One piece of a printf format string: literal text (still escaped, exactly
+ * as written between the quotes) or a conversion such as %d or %.2f. */
+typedef struct {
+    int is_conversion;
+    char conversion;        /* 'd', 'i', 'f' or 'g' (or the bad character) */
+    int precision;          /* digits after %. ; -1 when not given */
+    const char *text;       /* literal text: start and length inside the format */
+    size_t length;
+} FormatPiece;
+
+/* Reads the next piece of a printf format starting at *pos.
+ * Returns 1 for a piece, 0 at the end, -1 for an unsupported conversion
+ * (piece->conversion then holds the offending character, or 0 at the end). */
+int format_next(const char *format, size_t *pos, FormatPiece *piece);
 
 /* Prints the tree with indentation (the --ast option). */
 void ast_print_program(StmtList *program, FILE *out);

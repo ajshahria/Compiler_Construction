@@ -1,0 +1,10 @@
+// flags: --asm
+// C style (bonus): x86 assembly of printf with text, an int and a float.
+#include <stdio.h>
+
+int main() {
+    int x = 7;
+    float half = x / 2.0;
+    printf("x = %d, half = %.1f\n", x, half);
+    return 0;
+}

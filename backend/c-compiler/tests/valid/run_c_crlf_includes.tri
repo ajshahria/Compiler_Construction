@@ -1,0 +1,10 @@
+// flags: --run
+// C style (bonus): Windows line endings (CRLF, as the web editor sends them),
+// a comment after #include and spaces inside the directive.
+#include <stdio.h>
+#include <stdbool.h> // trailing comment
+#  include   <math.h>
+int main() {
+    printf("hi\n");
+    return 0;
+}

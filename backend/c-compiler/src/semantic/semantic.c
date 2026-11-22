@@ -10,6 +10,14 @@
  *   - invalid expressions (operator applied to operands of the wrong type)
  *   - non-bool condition in if / while
  *
+ * C style (bonus):
+ *   - only one function may be defined: int main(), at the top level
+ *   - with main(), only variable declarations may stand outside it
+ *   - return only inside main(), with an int value
+ *   - printf needs #include <stdio.h>; its conversions (%d %i %f %g, with an
+ *     optional precision such as %.2f) must match the number and types of the
+ *     arguments: %d/%i take an int or bool, %f/%g take a float
+ *
  * Typing rules:
  *   + - * /      int,int -> int; any mix of int/float -> float
  *   %            int,int -> int
@@ -24,10 +32,14 @@
 
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static SymbolTable *table;
 static int error_count;
+static int in_main;        /* inside the body of main() */
+static int block_depth;    /* 0 at the top level of the program */
+static int printf_reported;   /* the missing <stdio.h> was already reported */
 
 static void semantic_error(int line, const char *format, ...)
 {
@@ -187,6 +199,86 @@ static void check_condition(Expr *cond, const char *keyword, int line)
         semantic_error(line, "type mismatch: %s condition must be bool, got %s", keyword, type_name(t));
 }
 
+/* printf: the format's conversions against the arguments. */
+static void check_printf(Stmt *s)
+{
+    const char *format = s->as.printf_stmt.format;
+    ExprList *args = s->as.printf_stmt.args;
+    size_t count = args ? args->count : 0;
+    Type *types = NULL;
+
+    if (!header_included("stdio.h") && !printf_reported) {
+        semantic_error(s->line, "'printf' is not declared: add #include <stdio.h>");
+        printf_reported = 1;             /* once, not for every printf */
+    }
+    if (count > 0) {
+        types = malloc(count * sizeof *types);
+        if (types == NULL) {
+            perror("out of memory");
+            exit(2);
+        }
+    }
+    for (size_t i = 0; i < count; i++)
+        types[i] = check_expr(args->items[i]);
+
+    size_t pos = 0, used = 0;
+    FormatPiece piece;
+    int result;
+    while ((result = format_next(format, &pos, &piece)) != 0) {
+        if (result < 0) {
+            if (piece.conversion == 0)
+                semantic_error(s->line, "printf format ends with an incomplete conversion '%%'");
+            else
+                semantic_error(s->line, "unsupported conversion '%%%s%c' in printf format (use %%d, %%i, %%f, %%g, %%.Nf or %%%%)",
+                               piece.precision >= 0 ? "." : "", piece.conversion);
+            free(types);
+            return;
+        }
+        if (!piece.is_conversion)
+            continue;
+        if (used >= count) {
+            used++;
+            continue;
+        }
+        Type t = types[used];
+        int is_int_conv = piece.conversion == 'd' || piece.conversion == 'i';
+        if (t != TYPE_ERROR && is_int_conv && t == TYPE_FLOAT)
+            semantic_error(s->line, "type mismatch: '%%%c' in printf expects an int, got a float (use %%f)",
+                           piece.conversion);
+        else if (t != TYPE_ERROR && !is_int_conv && t != TYPE_FLOAT)
+            semantic_error(s->line, "type mismatch: '%%%c' in printf expects a float, got %s (use %%d)",
+                           piece.conversion, with_article(t));
+        used++;
+    }
+    if (used != count)
+        semantic_error(s->line, "printf format has %d conversion(s) but %d argument(s) were given",
+                       (int)used, (int)count);
+    free(types);
+}
+
+/* A program with main(): only declarations (globals) may stand outside it. */
+static void check_program_shape(StmtList *program)
+{
+    int functions = 0;
+    Stmt *first_main = NULL;
+    for (size_t i = 0; program != NULL && i < program->count; i++)
+        if (program->items[i]->kind == ST_FUNCTION) {
+            functions++;
+            if (first_main == NULL && strcmp(program->items[i]->as.function.name, "main") == 0)
+                first_main = program->items[i];
+        }
+    if (functions == 0)
+        return;            /* the manual's form: a plain list of statements */
+    for (size_t i = 0; i < program->count; i++) {
+        Stmt *s = program->items[i];
+        if (s->kind == ST_FUNCTION && first_main != NULL && s != first_main
+            && strcmp(s->as.function.name, "main") == 0)
+            semantic_error(s->line, "redefinition of 'main' (first defined at line %d)", first_main->line);
+        else if (s->kind != ST_FUNCTION && s->kind != ST_DECL && s->kind != ST_ERROR)
+            semantic_error(s->line, "statement outside of main(): only variable declarations may appear outside a function");
+    }
+}
+
 static void check_list(StmtList *list);
 
 static void check_stmt(Stmt *s)
@@ -239,8 +331,37 @@ static void check_stmt(Stmt *s)
         break;
     case ST_BLOCK:
         symtab_enter_scope(table);
+        block_depth++;
         check_list(s->as.block);
+        block_depth--;
         symtab_exit_scope(table);
+        break;
+    case ST_FUNCTION:
+        if (block_depth > 0)
+            semantic_error(s->line, "function '%s' cannot be defined inside a block", s->as.function.name);
+        else if (strcmp(s->as.function.name, "main") != 0)
+            semantic_error(s->line, "function '%s': only the function 'main' can be defined (functions are not supported)",
+                           s->as.function.name);
+        else if (s->as.function.type != TYPE_INT)
+            semantic_error(s->line, "'main' must return int, not %s", type_name(s->as.function.type));
+        symtab_enter_scope(table);
+        block_depth++;
+        in_main++;
+        check_list(s->as.function.body);
+        in_main--;
+        block_depth--;
+        symtab_exit_scope(table);
+        break;
+    case ST_RETURN: {
+        Type t = s->as.ret ? check_expr(s->as.ret) : TYPE_INT;
+        if (!in_main)
+            semantic_error(s->line, "'return' outside of main()");
+        else if (t != TYPE_ERROR && t != TYPE_INT)
+            semantic_error(s->line, "type mismatch: main() must return an int, got %s value", with_article(t));
+        break;
+    }
+    case ST_PRINTF:
+        check_printf(s);
         break;
     case ST_ERROR:
         break;
@@ -257,7 +378,11 @@ int semantic_check(StmtList *program, SymbolTable *symbols)
 {
     table = symbols;
     error_count = 0;
+    in_main = 0;
+    block_depth = 0;
+    printf_reported = 0;
     symtab_init(table);
+    check_program_shape(program);
     check_list(program);
     return error_count;
 }
