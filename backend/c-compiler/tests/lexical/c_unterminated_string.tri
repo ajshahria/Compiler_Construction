@@ -1,0 +1,6 @@
+// C style (bonus): a string literal without its closing quote.
+#include <stdio.h>
+int main() {
+    printf("open);
+    return 0;
+}

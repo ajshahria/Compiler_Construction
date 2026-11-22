@@ -24,7 +24,7 @@ Each team member built one compiler for this same language. All three share the 
 
 | Compiler | Folder | Executable | Written in | Extra surface syntax (bonus) |
 |---|---|---|---|---|
-| **tricora** (C) | [`backend/c-compiler`](backend/c-compiler) | `build/tricora` | C | the manual's language only |
+| **tricora** (C) | [`backend/c-compiler`](backend/c-compiler) | `build/tricora` | C | `#include`, `int main()`, `return`, `printf` with `%d %i %f %.Nf %g` |
 | **compiler** (C++) | [`backend/c++_compiler`](backend/c++_compiler) | `build/compiler.exe` | C++ | `#include`, `int main()`, `cout`, `cin`, `for`, `do-while`, `switch`, `?:`, `++`, `+=` |
 | **minijavac** (Java) | [`backend/javacompiler`](backend/javacompiler) | `build/minijavac` | C++ | `class` with `main`, `System.out.println`, `boolean`, `for`, `do-while`, `switch`, `++` |
 
@@ -54,6 +54,7 @@ A program written exactly as in the manual compiles with **all three compilers, 
 ### Bonus features (manual section 14)
 
 - **Language extensions** (C++ and Java compilers): `for`, `do-while`, `switch-case`, `break`/`continue`, unary and increment/decrement operators.
+- **C program form** (C compiler): `#include <stdio.h>`, `int main() { ... }`, `return`, and `printf` with type-checked `%d %i %f %.Nf %g` conversions.
 - **Optimization** (`--opt`): constant propagation and constant folding, dead code and unreachable code elimination, removal of unused temporaries.
 - **Graphical user interface**: a browser IDE with a source editor and one output tab per phase (see [Web user interface](#web-user-interface)).
 - **Improved error recovery**: errors from several statements are reported in one run.
@@ -283,10 +284,10 @@ Every compiler has a `tests/` folder with the four categories required by sectio
 
 | Category | C | C++ | Java | Demonstrates |
 |---|---|---|---|---|
-| `valid/` | 10 | 23 | 15 | programs that compile cleanly through to TAC, including the manual's sample (5.5) and TAC example (4.6) |
-| `lexical/` | 3 | 7 | 3 | invalid characters, invalid identifiers, unterminated comments |
+| `valid/` | 15 | 23 | 15 | programs that compile cleanly through to TAC, including the manual's sample (5.5) and TAC example (4.6) |
+| `lexical/` | 5 | 7 | 3 | invalid characters, invalid identifiers, unterminated comments |
 | `syntax/` | 3 | 9 | 4 | missing semicolons, unbalanced braces, several errors in one file |
-| `semantic/` | 8 | 9 | 9 | undeclared, redeclaration, scope violation, type mismatch, invalid assignment, invalid expression |
+| `semantic/` | 11 | 9 | 9 | undeclared, redeclaration, scope violation, type mismatch, invalid assignment, invalid expression |
 
 Run them all:
 
@@ -296,7 +297,7 @@ make -C backend/c++_compiler test
 make -C backend/javacompiler test
 ```
 
-Current result: C 24/24, C++ 48/48, Java 31/31 passing.
+Current result: C 34/34, C++ 48/48, Java 31/31 passing.
 
 ## Web user interface
 

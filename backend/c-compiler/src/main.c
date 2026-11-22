@@ -55,6 +55,10 @@ static const char *token_name(int token)
     static char single[8];
     switch (token) {
     case IDENT:         return "IDENTIFIER";
+    case STRING_LITERAL: return "STRING_LITERAL";
+    case RETURN: return "KEYWORD_RETURN";
+    case VOID:   return "KEYWORD_VOID";
+    case PRINTF: return "KEYWORD_PRINTF";
     case INT_LITERAL:   return "INT_LITERAL";
     case FLOAT_LITERAL: return "FLOAT_LITERAL";
     case INT:   return "KEYWORD_INT";
@@ -76,7 +80,7 @@ static const char *token_name(int token)
     case '<': case '>':                               return "RELATIONAL_OP";
     case '!':                                         return "LOGICAL_OP";
     case '=':                                         return "ASSIGN";
-    case '(': case ')': case '{': case '}': case ';': return "DELIMITER";
+    case '(': case ')': case '{': case '}': case ';': case ',': return "DELIMITER";
     }
     snprintf(single, sizeof single, "'%c'", token);
     return single;

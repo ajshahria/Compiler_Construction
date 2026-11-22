@@ -1,0 +1,8 @@
+exit 1
+line 7: semantic error: 'printf' is not declared: add #include <stdio.h>
+line 7: semantic error: type mismatch: '%d' in printf expects an int, got a float (use %f)
+line 8: semantic error: type mismatch: '%f' in printf expects a float, got an int (use %d)
+line 9: semantic error: printf format has 2 conversion(s) but 1 argument(s) were given
+line 10: semantic error: unsupported conversion '%s' in printf format (use %d, %i, %f, %g, %.Nf or %%)
+line 11: semantic error: type mismatch: main() must return an int, got a float value
+Compilation failed: 6 semantic error(s).

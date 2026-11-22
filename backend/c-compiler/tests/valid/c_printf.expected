@@ -1,0 +1,37 @@
+exit 0
+total = 0
+n = 5
+price = 2.5
+ok = true
+L1:
+t1 = n > 0
+ifFalse t1 goto L2
+t2 = total + n
+total = t2
+t3 = n - 1
+n = t3
+goto L1
+L2:
+outs "total = "
+out total
+outs "\n"
+outs "price: "
+outf price 6
+outs " | "
+t4 = price * 2
+outf t4 2
+outs " | "
+out price
+outs "\n"
+outs "ok = "
+out ok
+outs ", 100% done\n"
+outs "tab\there \"quoted\"\n"
+t5 = total > 10
+ifFalse t5 goto L3
+outs "big\n"
+goto L4
+L3:
+outs "not reached\n"
+goto L4
+L4:

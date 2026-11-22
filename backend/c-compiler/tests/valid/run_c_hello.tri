@@ -1,0 +1,8 @@
+// flags: --run
+// C style (bonus): the classic hello program, with #include, int main() and printf.
+#include <stdio.h>
+
+int main() {
+    printf("hel world\n");
+    return 0;
+}

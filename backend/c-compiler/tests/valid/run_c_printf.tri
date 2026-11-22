@@ -1,0 +1,27 @@
+// flags: --run
+// C style (bonus): the output of printf with %d, %f, %.2f, %g, %% and escapes,
+// exactly as a real C compiler prints it (a bool prints as 1).
+#include <stdio.h>
+#include <stdbool.h>
+
+int total = 0;
+
+int main(void) {
+    int n = 5;
+    float price = 2.5;
+    bool ok = true;
+    while (n > 0) {
+        total = total + n;
+        n = n - 1;
+    }
+    printf("total = %d\n", total);
+    printf("price: %f | %.2f | %g\n", price, price * 2, price);
+    printf("ok = %d, 100%% done\n", ok);
+    printf("tab\there \"quoted\"\n");
+    if (total > 10) {
+        printf("big\n");
+        return 0;
+    }
+    printf("not reached\n");
+    return 1;
+}

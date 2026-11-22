@@ -94,7 +94,8 @@ typedef enum {
     OP_LT, OP_GT, OP_LE, OP_GE, OP_EQ, OP_NE,   /* comparison */
     OP_AND, OP_OR,                              /* logical    */
     OP_NEG, OP_NOT,                             /* unary      */
-    OP_LABEL, OP_GOTO, OP_IFFALSE, OP_IFTRUE, OP_PRINT
+    OP_LABEL, OP_GOTO, OP_IFFALSE, OP_IFTRUE, OP_PRINT,
+    OP_OUTS, OP_OUT, OP_OUTF                    /* printf pieces (C style) */
 } OpCode;
 
 /* Operator text for OP_ADD .. OP_NOT, indexed by OpCode. */
@@ -107,6 +108,8 @@ typedef struct {
     Operand result, a, b;
     TacType ty;            /* type the operation works in */
     char label[NAME_LEN];  /* OP_LABEL / OP_GOTO / OP_IF* target */
+    char *str;             /* OP_OUTS: the text, C escapes kept (owned by the program) */
+    int precision;         /* OP_OUTF: digits after the decimal point */
 } Instr;
 
 /* Every variable and temporary: its name and type. A declared variable keeps
@@ -237,7 +240,10 @@ static void instr_text(const Instr *in, char *buf, size_t size)
     case OP_IFFALSE: snprintf(buf, size, "ifFalse %s goto %s", a, in->label); break;
     case OP_IFTRUE:  snprintf(buf, size, "if %s goto %s", a, in->label); break;
     case OP_PRINT:   snprintf(buf, size, "print %s", a); break;
-    default:         snprintf(buf, size, "%s = %s %s %s", r, a, OP_SYMBOL[in->op], b); break;
+    case OP_OUTS:    snprintf(buf, size, "outs \"%s\"", in->str); break;
+    case OP_OUT:     snprintf(buf, size, "out %s", a); break;
+    case OP_OUTF:    snprintf(buf, size, "outf %s %d", a, in->precision); break;
+    default:        snprintf(buf, size, "%s = %s %s %s", r, a, OP_SYMBOL[in->op], b); break;
     }
 }
 
@@ -280,10 +286,26 @@ static int parse_line(char *line, Instr *in)
 {
     char *tok[8];
     int n = 0;
-    for (char *t = strtok(line, " \t\r"); t != NULL && n < 8; t = strtok(NULL, " \t\r"))
-        tok[n++] = t;
     memset(in, 0, sizeof *in);
     in->result.slot = in->a.slot = in->b.slot = -1;
+
+    /* outs "text": the text may contain spaces, so it is not split into tokens */
+    char *start = line;
+    while (*start == ' ' || *start == '\t') start++;
+    if (strncmp(start, "outs ", 5) == 0) {
+        char *open = strchr(start, '"');
+        char *close = strrchr(start, '"');
+        if (open == NULL || close == open)
+            return 0;
+        in->op = OP_OUTS;
+        in->str = (char *)xalloc((size_t)(close - open));
+        memcpy(in->str, open + 1, (size_t)(close - open - 1));
+        in->str[close - open - 1] = '\0';
+        return 1;
+    }
+
+    for (char *t = strtok(line, " \t\r"); t != NULL && n < 8; t = strtok(NULL, " \t\r"))
+        tok[n++] = t;
 
     size_t len = n == 1 ? strlen(tok[0]) : 0;
     if (n == 1 && len > 1 && len < NAME_LEN && tok[0][len - 1] == ':') {
@@ -305,6 +327,16 @@ static int parse_line(char *line, Instr *in)
     if (n == 2 && strcmp(tok[0], "print") == 0) {
         in->op = OP_PRINT;
         return parse_operand(tok[1], &in->a);
+    }
+    if (n == 2 && strcmp(tok[0], "out") == 0) {
+        in->op = OP_OUT;
+        return parse_operand(tok[1], &in->a);
+    }
+    if (n == 3 && strcmp(tok[0], "outf") == 0) {
+        char *end;
+        in->op = OP_OUTF;
+        in->precision = (int)strtol(tok[2], &end, 10);
+        return *end == '\0' && in->precision >= 0 && in->precision <= 20 && parse_operand(tok[1], &in->a);
     }
     if (n >= 3 && n <= 5 && strcmp(tok[1], "=") == 0) {
         if (!parse_operand(tok[0], &in->result) || in->result.kind != OPD_NAME)
@@ -423,6 +455,8 @@ void tac_free(TacProgram *p)
 {
     if (p == NULL)
         return;
+    for (int i = 0; i < p->count; i++)
+        free(p->code[i].str);
     free(p->code);
     free(p->cells);
     free(p);
@@ -433,6 +467,10 @@ char *tac_text(const TacProgram *p)
     Text t = { NULL, 0, 0 };
     char line[3 * NAME_LEN + 32];
     for (int i = 0; i < p->count; i++) {
+        if (p->code[i].op == OP_OUTS) {           /* the text can be longer than a line buffer */
+            text_add(&t, "outs \"%s\"\n", p->code[i].str);
+            continue;
+        }
         instr_text(&p->code[i], line, sizeof line);
         text_add(&t, "%s\n", line);
     }
@@ -551,7 +589,10 @@ static void unreachable_pass(TacProgram *p)
     int n = 0, dead = 0;
     for (int i = 0; i < p->count; i++) {
         if (p->code[i].op == OP_LABEL) dead = 0;
-        if (dead) continue;
+        if (dead) {
+            free(p->code[i].str);
+            continue;
+        }
         p->code[n++] = p->code[i];
         if (p->code[i].op == OP_GOTO) dead = 1;
     }
@@ -669,6 +710,26 @@ static Value convert_value(Value v, TacType type)
     return r;
 }
 
+/* The characters a C string literal stands for: \n becomes a newline, etc. */
+static char *unescape(const char *s)
+{
+    char *out = (char *)xalloc(strlen(s) + 1);
+    size_t n = 0;
+    for (; *s != '\0'; s++) {
+        if (*s != '\\' || s[1] == '\0') { out[n++] = *s; continue; }
+        s++;
+        switch (*s) {
+        case 'n':  out[n++] = '\n'; break;
+        case 't':  out[n++] = '\t'; break;
+        case 'r':  out[n++] = '\r'; break;
+        case '0':  break;                      /* \0 would end the string: nothing printed after it */
+        default:   out[n++] = *s;   break;     /* \\ \" \' */
+        }
+    }
+    out[n] = '\0';
+    return out;
+}
+
 static int label_index(const TacProgram *p, const char *label)
 {
     for (int i = 0; i < p->count; i++)
@@ -721,6 +782,19 @@ char *tac_run(const TacProgram *p, const char **runtime_error)
             if (a.ty == TAC_FLOAT)     text_add(&out, "%g\n", a.fv);
             else if (a.ty == TAC_BOOL) text_add(&out, "%s\n", a.iv ? "true" : "false");
             else                       text_add(&out, "%ld\n", (long)a.iv);
+            continue;
+        case OP_OUTS: {                   /* printf text */
+            char *text = unescape(in->str);
+            text_add(&out, "%s", text);
+            free(text);
+            continue;
+        }
+        case OP_OUT:                      /* printf %d / %g: like C, a bool prints as 0 or 1 */
+            if (a.ty == TAC_FLOAT) text_add(&out, "%g", a.fv);
+            else                   text_add(&out, "%ld", (long)a.iv);
+            continue;
+        case OP_OUTF:                     /* printf %f / %.Nf */
+            text_add(&out, "%.*f", in->precision, as_double(a));
             continue;
         case OP_ASSIGN:
             r = a;
@@ -802,7 +876,79 @@ typedef struct {
     double *floats;       /* float constant pool .LF0, .LF1, ... */
     int float_count, float_cap;
     int print_labels;
+    const char **strings; /* printf text pool .LS0, .LS1, ... (C escapes kept) */
+    int string_count, string_cap;
+    int uses_printf;      /* a printf piece was emitted: add its formats to .data */
 } Asm;
+
+static int string_label(Asm *g, const char *text)
+{
+    if (g->string_count == g->string_cap) {
+        g->string_cap = g->string_cap ? g->string_cap * 2 : 16;
+        g->strings = (const char **)xrealloc(g->strings, (size_t)g->string_cap * sizeof(char *));
+    }
+    g->strings[g->string_count] = text;
+    return g->string_count++;
+}
+
+static void asm_ins(Asm *g, const char *op, const char *a, const char *b);
+static void int_operand(const Operand *o, char *buf, size_t size);
+static void load_float(Asm *g, const Operand *o);
+
+/* A printf piece: pushes the arguments and calls printf. */
+static void emit_out(Asm *g, const Instr *in)
+{
+    char a[NAME_LEN + 32];
+    g->uses_printf = 1;
+    if (in->op == OP_OUTS) {
+        snprintf(a, sizeof a, "$.LS%d", string_label(g, in->str));
+        asm_ins(g, "pushl", a, NULL);
+        asm_ins(g, "pushl", "$.Lfmt_str_n", NULL);
+        asm_ins(g, "call", "_printf", NULL);
+        asm_ins(g, "addl", "$8", "%esp");
+        return;
+    }
+    if (in->op == OP_OUTF || in->a.type == TAC_FLOAT) {   /* printf takes a double */
+        asm_ins(g, "subl", "$16", "%esp");
+        if (in->op == OP_OUTF) {
+            snprintf(a, sizeof a, "$%d", in->precision);
+            asm_ins(g, "movl", "$.Lfmt_prec_n", "(%esp)");
+            asm_ins(g, "movl", a, "4(%esp)");
+            load_float(g, &in->a);
+            asm_ins(g, "fstpl", "8(%esp)", NULL);
+        } else {
+            asm_ins(g, "movl", "$.Lfmt_float_n", "(%esp)");
+            load_float(g, &in->a);
+            asm_ins(g, "fstpl", "4(%esp)", NULL);
+        }
+        asm_ins(g, "call", "_printf", NULL);
+        asm_ins(g, "addl", "$16", "%esp");
+        return;
+    }
+    int_operand(&in->a, a, sizeof a);              /* int, and bool as 0/1 */
+    asm_ins(g, "pushl", a, NULL);
+    asm_ins(g, "pushl", "$.Lfmt_int_n", NULL);
+    asm_ins(g, "call", "_printf", NULL);
+    asm_ins(g, "addl", "$8", "%esp");
+}
+
+/* The string as GNU as wants it in .asciz "...": C escapes become
+ * \n \t \r \\ \" and anything else unusual an octal escape. */
+static void add_asm_string(Text *out, const char *escaped)
+{
+    char *raw = unescape(escaped);
+    text_add(out, "    .asciz \"");
+    for (const unsigned char *c = (const unsigned char *)raw; *c != '\0'; c++) {
+        if (*c == '\n')                 text_add(out, "\\n");
+        else if (*c == '\t')            text_add(out, "\\t");
+        else if (*c == '\r')            text_add(out, "\\r");
+        else if (*c == '\\' || *c == '"') text_add(out, "\\%c", *c);
+        else if (*c < 32 || *c > 126)   text_add(out, "\\%03o", *c);
+        else                            text_add(out, "%c", *c);
+    }
+    text_add(out, "\"\n");
+    free(raw);
+}
 
 static void asm_ins(Asm *g, const char *op, const char *a, const char *b)
 {
@@ -943,6 +1089,11 @@ static void emit_print(Asm *g, const Instr *in)
 static void emit_instr(Asm *g, const Instr *in)
 {
     char line[3 * NAME_LEN + 32], res[NAME_LEN + 8], a[NAME_LEN + 8], jump[NAME_LEN + 2];
+    if (in->op == OP_OUTS) {
+        text_add(&g->text, "    # outs \"%s\"\n", in->str);
+        emit_out(g, in);
+        return;
+    }
     instr_text(in, line, sizeof line);
     text_add(&g->text, "    # %s\n", line);
     snprintf(jump, sizeof jump, ".%s", in->label);
@@ -965,6 +1116,10 @@ static void emit_instr(Asm *g, const Instr *in)
         return;
     case OP_PRINT:
         emit_print(g, in);
+        return;
+    case OP_OUT:
+    case OP_OUTF:
+        emit_out(g, in);
         return;
     case OP_ASSIGN:
         if (in->result.type == TAC_FLOAT) {
@@ -1027,6 +1182,16 @@ char *tac_assembly(const TacProgram *p, const char *title)
     text_add(&out, ".Lfmt_str:\n    .asciz \"%%s\\n\"\n");
     text_add(&out, ".Lstr_true:\n    .asciz \"true\"\n");
     text_add(&out, ".Lstr_false:\n    .asciz \"false\"\n");
+    if (g.uses_printf) {      /* printf formats, only for a program with printf */
+        text_add(&out, ".Lfmt_int_n:\n    .asciz \"%%d\"\n");
+        text_add(&out, ".Lfmt_float_n:\n    .asciz \"%%g\"\n");
+        text_add(&out, ".Lfmt_prec_n:\n    .asciz \"%%.*f\"\n");
+        text_add(&out, ".Lfmt_str_n:\n    .asciz \"%%s\"\n");
+    }
+    for (int k = 0; k < g.string_count; k++) {
+        text_add(&out, ".LS%d:\n", k);
+        add_asm_string(&out, g.strings[k]);
+    }
     for (int k = 0; k < g.float_count; k++) {
         char v[64];
         snprintf(v, sizeof v, "%.9g", g.floats[k]);
@@ -1040,5 +1205,6 @@ char *tac_assembly(const TacProgram *p, const char *title)
     text_add(&out, "    .text\n    .globl _main\n%s", text_take(&g.text));
     free(g.text.data);
     free(g.floats);
+    free(g.strings);
     return text_take(&out);
 }

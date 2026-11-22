@@ -136,6 +136,99 @@ Stmt *ast_error(int line)
     return new_stmt(ST_ERROR, line);
 }
 
+Stmt *ast_function(Type type, char *name, StmtList *body, int line)
+{
+    Stmt *s = new_stmt(ST_FUNCTION, line);
+    s->as.function.type = type;
+    s->as.function.name = name;
+    s->as.function.body = body;
+    return s;
+}
+
+Stmt *ast_return(Expr *value, int line)
+{
+    Stmt *s = new_stmt(ST_RETURN, line);
+    s->as.ret = value;
+    return s;
+}
+
+Stmt *ast_printf(char *format, ExprList *args, int line)
+{
+    Stmt *s = new_stmt(ST_PRINTF, line);
+    s->as.printf_stmt.format = format;
+    s->as.printf_stmt.args = args;
+    return s;
+}
+
+ExprList *ast_expr_list_new(void)
+{
+    return allocate(sizeof(ExprList));
+}
+
+ExprList *ast_expr_list_append(ExprList *list, Expr *expr)
+{
+    if (list == NULL)
+        list = ast_expr_list_new();
+    if (list->count == list->capacity) {
+        list->capacity = list->capacity ? list->capacity * 2 : 4;
+        list->items = realloc(list->items, list->capacity * sizeof *list->items);
+        if (list->items == NULL) {
+            perror("out of memory");
+            exit(2);
+        }
+    }
+    list->items[list->count++] = expr;
+    return list;
+}
+
+/* Supported conversions: %d %i (int, bool), %f %g (float), with an optional
+ * precision such as %.2f, and %% for a literal percent sign. */
+int format_next(const char *format, size_t *pos, FormatPiece *piece)
+{
+    size_t i = *pos;
+    piece->is_conversion = 0;
+    piece->conversion = 0;
+    piece->precision = -1;
+    piece->text = format + i;
+    piece->length = 0;
+    if (format[i] == '\0')
+        return 0;
+
+    if (format[i] != '%') {                 /* literal text up to the next % */
+        while (format[i] != '\0' && format[i] != '%')
+            i += (format[i] == '\\' && format[i + 1] != '\0') ? 2 : 1;
+        piece->length = (size_t)(format + i - piece->text);
+        *pos = i;
+        return 1;
+    }
+    i++;                                     /* skip the % */
+    if (format[i] == '%') {                  /* %% prints one % */
+        piece->text = format + i;
+        piece->length = 1;
+        *pos = i + 1;
+        return 1;
+    }
+    if (format[i] == '.') {
+        int digits = 0, value = 0;
+        for (i++; format[i] >= '0' && format[i] <= '9'; i++, digits++)
+            value = value * 10 + (format[i] - '0');
+        piece->precision = digits ? value : 0;
+    }
+    piece->conversion = format[i];
+    if (format[i] == '\0')
+        return -1;
+    *pos = i + 1;
+    if (format[i] == 'd' || format[i] == 'i') {
+        piece->is_conversion = 1;
+        return piece->precision < 0 ? 1 : -1;      /* %.2d is not supported */
+    }
+    if (format[i] == 'f' || format[i] == 'g') {
+        piece->is_conversion = 1;
+        return 1;
+    }
+    return -1;
+}
+
 StmtList *ast_list_new(void)
 {
     return allocate(sizeof(StmtList));
@@ -280,6 +373,21 @@ static void print_stmt(Stmt *s, int depth)
     case ST_BLOCK:
         fprintf(ast_out, "Block (line %d)\n", s->line);
         print_list(s->as.block, depth + 1);
+        break;
+    case ST_FUNCTION:
+        fprintf(ast_out, "Function %s %s() (line %d)\n", type_name(s->as.function.type),
+                s->as.function.name, s->line);
+        print_list(s->as.function.body, depth + 1);
+        break;
+    case ST_RETURN:
+        fprintf(ast_out, "Return (line %d)\n", s->line);
+        if (s->as.ret)
+            print_expr(s->as.ret, depth + 1);
+        break;
+    case ST_PRINTF:
+        fprintf(ast_out, "Printf \"%s\" (line %d)\n", s->as.printf_stmt.format, s->line);
+        for (size_t i = 0; s->as.printf_stmt.args && i < s->as.printf_stmt.args->count; i++)
+            print_expr(s->as.printf_stmt.args->items[i], depth + 1);
         break;
     case ST_ERROR:
         fprintf(ast_out, "ErrorStatement (line %d)\n", s->line);

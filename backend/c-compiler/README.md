@@ -1,6 +1,6 @@
 # C Compiler
 
-A compiler front-end for the lab manual's mini language (`.tri` files), written in C with Flex and Bison. Its front end produces Three Address Code, the output the manual requires; an extra back end can then optimize the TAC, translate it to x86 assembly, or run it:
+A compiler front-end for the lab manual's mini language (`.tri` files), written in C with Flex and Bison. A program may be written exactly as in the manual, or as ordinary C (bonus): `#include <stdio.h>`, `int main() { ... }`, `return` and `printf("...", ...)` with `%d %i %f %.Nf %g %%` (see [`docs/grammar.md`](docs/grammar.md)). Its front end produces Three Address Code, the output the manual requires; an extra back end can then optimize the TAC, translate it to x86 assembly, or run it:
 
 ```text
 source (.tri) -> lexer -> parser/AST -> semantic analysis (symbol table) -> Three Address Code
@@ -33,10 +33,10 @@ c-compiler/
 │   └── invalid/                 type_error.tri, undeclared.tri
 └── tests/
     ├── run_tests.sh             runs every test and compares it with its .expected file
-    ├── valid/                   10 programs that compile (5 of them test --opt, --run or --asm)
-    ├── lexical/                 3 programs with lexical errors
+    ├── valid/                   15 programs that compile (9 of them test --opt, --run or --asm)
+    ├── lexical/                 5 programs with lexical errors
     ├── syntax/                  3 programs with syntax errors
-    └── semantic/                8 programs with semantic errors
+    └── semantic/                11 programs with semantic errors
 ```
 
 `make` writes everything it generates to `build/` (`parser.tab.c`, `parser.tab.h`, `lex.yy.c` and `tricora.exe`). That folder is not committed.
@@ -84,7 +84,7 @@ Each `tests/<category>/<name>.tri` has a matching `<name>.expected` file. Its fi
 
 | Folder | Programs |
 |---|---|
-| `valid/` | arithmetic, asm_small, control, manual_sample, manual_tac_example, nested_scopes, opt_constant_folding, run_division_by_zero, run_manual_sample, run_types_and_scopes |
-| `lexical/` | invalid_character, invalid_identifier, unterminated_comment |
+| `valid/` | arithmetic, asm_printf, asm_small, c_printf, control, manual_sample, manual_tac_example, nested_scopes, opt_constant_folding, run_c_crlf_includes, run_c_hello, run_c_printf, run_division_by_zero, run_manual_sample, run_types_and_scopes |
+| `lexical/` | c_bad_header, c_unterminated_string, invalid_character, invalid_identifier, unterminated_comment |
 | `syntax/` | missing_parenthesis, missing_semicolon, multiple_errors |
-| `semantic/` | invalid_assignment, invalid_expression, multiple_errors, non_bool_condition, redeclaration, scope_violation, type_mismatch, undeclared |
+| `semantic/` | c_main_errors, c_printf_errors, c_return_outside_main, invalid_assignment, invalid_expression, multiple_errors, non_bool_condition, redeclaration, scope_violation, type_mismatch, undeclared |

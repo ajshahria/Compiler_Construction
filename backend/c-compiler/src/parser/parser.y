@@ -7,6 +7,12 @@
  * dangling-else is resolved by giving ELSE a higher precedence than the
  * if-without-else rule, so an else binds to the nearest if.
  *
+ * C style (bonus): besides the manual's plain list of statements, a program
+ * may be written as C, with #include lines (handled by the lexer), an
+ * `int main() { ... }` function, `return` and `printf("...", ...)`. Rules a
+ * grammar cannot express (only one function, called main, at the top level)
+ * are checked by the semantic analyzer.
+ *
  * Error recovery: the `error` token lets the parser skip to the next ';' or
  * '}' after a syntax error, so several syntax errors can be reported in one run.
  *
@@ -39,6 +45,7 @@ int parser_errors = 0;            /* number of syntax errors reported */
     Expr *expr;
     Stmt *stmt;
     StmtList *list;
+    ExprList *args;
 }
 
 %token <text>    IDENT
@@ -46,11 +53,14 @@ int parser_errors = 0;            /* number of syntax errors reported */
 %token <real>    FLOAT_LITERAL
 %token INT FLOAT BOOL IF ELSE WHILE PRINT TRUE FALSE
 %token EQ NE LE GE AND OR
+%token <text>    STRING_LITERAL
+%token RETURN VOID PRINTF      /* C style (bonus): int main(), return, printf */
 
 %type <type> type
 %type <expr> expression
 %type <stmt> statement block
 %type <list> statement_list
+%type <args> printf_args
 
 /* Precedence, lowest to highest. */
 %left OR
@@ -89,8 +99,20 @@ statement
                                              { $$ = ast_if($3, $5, $7, @1.first_line); }
     | WHILE '(' expression ')' statement     { $$ = ast_while($3, $5, @1.first_line); }
     | block                                  { $$ = $1; }
+    /* ----- C style (bonus): int main() { ... }, return, printf ----- */
+    | type IDENT '(' ')' block               { $$ = ast_function($1, $2, $5->as.block, @2.first_line); }
+    | type IDENT '(' VOID ')' block          { $$ = ast_function($1, $2, $6->as.block, @2.first_line); }
+    | RETURN expression ';'                  { $$ = ast_return($2, @1.first_line); }
+    | RETURN ';'                             { $$ = ast_return(NULL, @1.first_line); }
+    | PRINTF '(' STRING_LITERAL printf_args ')' ';'
+                                             { $$ = ast_printf($3, $4, @1.first_line); }
     | error ';'                              { $$ = ast_error(@1.first_line); yyerrok; }
     | error '}'                              { $$ = ast_error(@1.first_line); yyerrok; }
+    ;
+
+printf_args
+    : /* empty */                            { $$ = ast_expr_list_new(); }
+    | printf_args ',' expression             { $$ = ast_expr_list_append($1, $3); }
     ;
 
 block

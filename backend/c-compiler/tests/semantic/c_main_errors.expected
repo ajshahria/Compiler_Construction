@@ -1,0 +1,5 @@
+exit 1
+line 5: semantic error: statement outside of main(): only variable declarations may appear outside a function
+line 7: semantic error: redefinition of 'main' (first defined at line 6)
+line 8: semantic error: function 'helper': only the function 'main' can be defined (functions are not supported)
+Compilation failed: 3 semantic error(s).
