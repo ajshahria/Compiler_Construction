@@ -1,0 +1,14 @@
+// scanf("%d %f", &a, &b) becomes one 'read' instruction per variable.
+#include <stdio.h>
+
+int main() {
+    int a;
+    float b;
+    bool ok;
+    scanf("%d %f", &a, &b);
+    scanf("%d", &ok);
+    if (ok) {
+        printf("%d %.2f\n", a + 1, b * 2);
+    }
+    return 0;
+}

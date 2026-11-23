@@ -29,6 +29,8 @@ static std::string displayName(const Node* node) {
     if (k == "inc")      return "Increment";
     if (k == "dec")      return "Decrement";
     if (k == "print")    return "Print";
+    if (k == "scanner")  return "ScannerDecl";
+    if (k == "read")     return "ScannerRead";
     if (k == "if")       return node->children.size() > 2 ? "IfElse" : "If";
     if (k == "while")    return "While";
     if (k == "for")      return "For";

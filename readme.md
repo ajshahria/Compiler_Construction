@@ -24,9 +24,9 @@ Each team member built one compiler for this same language. All three share the 
 
 | Compiler | Folder | Executable | Written in | Extra surface syntax (bonus) |
 |---|---|---|---|---|
-| **tricora** (C) | [`backend/c-compiler`](backend/c-compiler) | `build/tricora` | C | `#include`, `int main()`, `return`, `printf` with `%d %i %f %.Nf %g` |
+| **tricora** (C) | [`backend/c-compiler`](backend/c-compiler) | `build/tricora` | C | `#include`, `int main()`, `return`, `printf` with `%d %i %f %.Nf %g`, `scanf` |
 | **compiler** (C++) | [`backend/c++_compiler`](backend/c++_compiler) | `build/compiler.exe` | C++ | `#include`, `int main()`, `cout`, `cin`, `for`, `do-while`, `switch`, `?:`, `++`, `+=` |
-| **minijavac** (Java) | [`backend/javacompiler`](backend/javacompiler) | `build/minijavac` | C++ | `class` with `main`, `System.out.println`, `boolean`, `for`, `do-while`, `switch`, `++` |
+| **minijavac** (Java) | [`backend/javacompiler`](backend/javacompiler) | `build/minijavac` | C++ | `class` with `main`, `import`, `System.out.println`, `Scanner` input, `boolean`, `for`, `do-while`, `switch`, `++` |
 
 A program written exactly as in the manual compiles with **all three compilers, with no flags**.
 
@@ -54,7 +54,8 @@ A program written exactly as in the manual compiles with **all three compilers, 
 ### Bonus features (manual section 14)
 
 - **Language extensions** (C++ and Java compilers): `for`, `do-while`, `switch-case`, `break`/`continue`, unary and increment/decrement operators.
-- **C program form** (C compiler): `#include <stdio.h>`, `int main() { ... }`, `return`, and `printf` with type-checked `%d %i %f %.Nf %g` conversions.
+- **C program form** (C compiler): `#include <stdio.h>`, `int main() { ... }`, `return`, `printf` with type-checked `%d %i %f %.Nf %g` conversions, and `scanf("%d %f", &a, &b)` to read input.
+- **Program input** (all three compilers): C++ `cin >> x`, C `scanf`, Java `Scanner` (`nextInt`, `nextFloat`, `nextDouble`, `nextBoolean`). Each read becomes the TAC instruction `read x`; `--run` takes the input from standard input, and the web interface shows an input box.
 - **Optimization** (`--opt`): constant propagation and constant folding, dead code and unreachable code elimination, removal of unused temporaries.
 - **Graphical user interface**: a browser IDE with a source editor and one output tab per phase (see [Web user interface](#web-user-interface)).
 - **Improved error recovery**: errors from several statements are reported in one run.
@@ -200,6 +201,7 @@ Each phase can be shown on its own. These options work in all three compilers:
 
 | Option | Shows |
 |---|---|
+| `--headers` | the `#include` headers (C, C++) or `import` lines (Java), with their line numbers (bonus) |
 | `--tokens` | token stream (lexical analysis) |
 | `--ast` | Abstract Syntax Tree, indented |
 | `--symtab` | symbol table: name, type, scope, line declared |

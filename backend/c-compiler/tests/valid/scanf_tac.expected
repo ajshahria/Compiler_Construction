@@ -1,0 +1,14 @@
+exit 0
+read a
+read b
+read ok
+ifFalse ok goto L1
+t1 = a + 1
+out t1
+outs " "
+t2 = b * 2
+outf t2 2
+outs "\n"
+L1:
+goto L2
+L2:

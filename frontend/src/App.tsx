@@ -12,13 +12,14 @@ import {
 import { EditorPane } from "./EditorPane";
 import { OutputPane } from "./OutputPane";
 
-/** True if the source reads input with `cin >>` (ignoring comments and string literals). */
+/** True if the source reads input (ignoring comments and string literals):
+ *  `cin >>` (C++), `scanf(` (C) or a Scanner's `.nextInt()` etc. (Java). */
 function readsInput(source: string): boolean {
   const code = source
     .replace(/\/\*[\s\S]*?\*\//g, " ")
     .replace(/\/\/.*$/gm, " ")
     .replace(/"(?:\\.|[^"\\\n])*"/g, '""');
-  return /\bcin\s*>>/.test(code);
+  return /\bcin\s*>>|\bscanf\s*\(|\.next(Int|Float|Double|Boolean)\s*\(/.test(code);
 }
 
 type IEditor = Parameters<OnMount>[0];

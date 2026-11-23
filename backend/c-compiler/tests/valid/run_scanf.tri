@@ -1,0 +1,15 @@
+// flags: --run
+// input: 41 1.25 1
+#include <stdio.h>
+
+int main() {
+    int a;
+    float b;
+    bool ok;
+    scanf("%d %f", &a, &b);
+    scanf("%d", &ok);
+    if (ok) {
+        printf("a+1=%d b*2=%.2f\n", a + 1, b * 2);
+    }
+    return 0;
+}

@@ -1,0 +1,13 @@
+// flags: --headers
+// The #include headers are listed by --headers; a repeated #include is ignored.
+#include <stdio.h>
+#include <math.h>
+#include <stdlib.h>
+#include <stdio.h>
+
+int main() {
+    int x;
+    x = 2;
+    printf("%d\n", x);
+    return 0;
+}

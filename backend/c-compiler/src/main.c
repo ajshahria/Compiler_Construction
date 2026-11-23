@@ -30,23 +30,25 @@ extern int yyparse(void);
 extern StmtList *program_root;   /* set by the parser   */
 extern int lexer_errors;         /* counted by the lexer  */
 extern int parser_errors;        /* counted by the parser */
+extern void print_headers(FILE *out);   /* lexer.l: table of the #include headers */
 
-typedef enum { MODE_TOKENS, MODE_AST, MODE_SYMTAB, MODE_TAC, MODE_OPT, MODE_ASM, MODE_RUN, MODE_ALL } Mode;
+typedef enum { MODE_HEADERS, MODE_TOKENS, MODE_AST, MODE_SYMTAB, MODE_TAC, MODE_OPT, MODE_ASM, MODE_RUN, MODE_ALL } Mode;
 
 static void usage(const char *program)
 {
     fprintf(stderr,
         "Usage: %s [option] <source-file> [-o output-file]\n"
         "Options:\n"
-        "  --tokens   print the token stream (lexical analysis)\n"
+        "  --headers  list the #include headers found (preprocessor step)\n"
+        "  --tokens  print the token stream (lexical analysis)\n"
         "  --ast      print the abstract syntax tree\n"
         "  --symtab   print the symbol table after semantic analysis\n"
         "  --tac      print three address code (default)\n"
         "  --opt      print optimized three address code\n"
         "  --asm      print x86 assembly (32-bit, AT&T syntax, MinGW)\n"
         "  --run      run the program (TAC interpreter) and print its output\n"
-        "  --all      print every phase: tokens, AST, symbol table, TAC,\n"
-        "             optimized TAC, assembly and the program output\n",
+        "  --all      print every phase: tokens, headers, AST, symbol table,\n"
+        "             TAC, optimized TAC, assembly and the program output\n",
         program);
 }
 
@@ -59,6 +61,7 @@ static const char *token_name(int token)
     case RETURN: return "KEYWORD_RETURN";
     case VOID:   return "KEYWORD_VOID";
     case PRINTF: return "KEYWORD_PRINTF";
+    case SCANF:  return "KEYWORD_SCANF";
     case INT_LITERAL:   return "INT_LITERAL";
     case FLOAT_LITERAL: return "FLOAT_LITERAL";
     case INT:   return "KEYWORD_INT";
@@ -80,6 +83,7 @@ static const char *token_name(int token)
     case '<': case '>':                               return "RELATIONAL_OP";
     case '!':                                         return "LOGICAL_OP";
     case '=':                                         return "ASSIGN";
+    case '&':                                         return "ADDRESS_OP";
     case '(': case ')': case '{': case '}': case ';': case ',': return "DELIMITER";
     }
     snprintf(single, sizeof single, "'%c'", token);
@@ -167,7 +171,8 @@ int main(int argc, char **argv)
     const char *output = NULL;
 
     for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--tokens") == 0)      mode = MODE_TOKENS;
+        if (strcmp(argv[i], "--headers") == 0)     mode = MODE_HEADERS;
+        else if (strcmp(argv[i], "--tokens") == 0) mode = MODE_TOKENS;
         else if (strcmp(argv[i], "--ast") == 0)    mode = MODE_AST;
         else if (strcmp(argv[i], "--symtab") == 0) mode = MODE_SYMTAB;
         else if (strcmp(argv[i], "--tac") == 0 || strcmp(argv[i], "--ir") == 0) mode = MODE_TAC;
@@ -193,6 +198,26 @@ int main(int argc, char **argv)
         return 2;
     }
 
+    /* ---- Preprocessor step: the #include headers ----
+     * The lexer records each #include as it scans, so scan the whole file
+     * once (the tokens are thrown away) and print the header table. */
+    if (mode == MODE_HEADERS) {
+        if ((yyin = fopen(input, "r")) == NULL) {
+            perror(input);
+            return 2;
+        }
+        while (yylex() != 0)
+            ;
+        fclose(yyin);
+        print_headers(out);
+        if (lexer_errors) {
+            fflush(out);
+            fprintf(stderr, "Compilation failed: %d lexical error(s).\n", lexer_errors);
+            return 1;
+        }
+        return 0;
+    }
+
     /* ---- Phase 1: lexical analysis (token listing only) ---- */
     if (mode == MODE_TOKENS || mode == MODE_ALL) {
         if ((yyin = fopen(input, "r")) == NULL) {
@@ -210,6 +235,8 @@ int main(int argc, char **argv)
         }
         if (mode == MODE_TOKENS)
             return 0;
+        heading(out, "HEADERS");   /* --all: recorded by the scan above */
+        print_headers(out);
         yylineno = 1;   /* --all: scan the file again for the parser */
     }
 

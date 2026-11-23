@@ -1,0 +1,14 @@
+exit 0
+read n
+total = 0.0
+i = 0
+L1:
+t1 = i < n
+ifFalse t1 goto L2
+read x
+t2 = total + x
+total = t2
+i = i + 1
+goto L1
+L2:
+print total

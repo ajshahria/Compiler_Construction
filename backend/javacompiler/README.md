@@ -1,6 +1,6 @@
 # MiniJava Compiler
 
-A compiler front-end for the lab manual's mini language, written in C++ with Flex and Bison. A program is either a bare list of statements, exactly as in the manual's sample program, or a `class` with `main` (`--strict` accepts only the class form); inside it, statements can be written exactly as in the manual (`bool`, `print x;`) or in Java style (`boolean`, `System.out.println(x);`). Its front end produces Three Address Code, the output the manual requires; an extra back end can then optimize the TAC, translate it to x86 assembly, or run it:
+A compiler front-end for the lab manual's mini language, written in C++ with Flex and Bison. A program is either a bare list of statements, exactly as in the manual's sample program, or a `class` with `main` (`--strict` accepts only the class form); inside it, statements can be written exactly as in the manual (`bool`, `print x;`) or in Java style (`boolean`, `System.out.println(x);`). Input is read Java style: `import java.util.Scanner;`, `Scanner sc = new Scanner(System.in);`, then `int n = sc.nextInt();` (also `nextFloat`, `nextDouble`, `nextBoolean`); each read becomes a TAC `read n`, and `--run` reads standard input. Its front end produces Three Address Code, the output the manual requires; an extra back end can then optimize the TAC, translate it to x86 assembly, or run it:
 
 ```text
 source (.java) -> lexer -> parser/AST -> semantic analysis (symbol table) -> Three Address Code
@@ -30,10 +30,10 @@ javacompiler/
 │   └── Example.java             sample program in Java style
 └── tests/
     ├── run_tests.sh             runs every test and compares it with its .expected file
-    ├── valid/                   15 programs that compile (5 of them test --opt, --run or --asm)
-    ├── lexical/                 3 programs with lexical errors
+    ├── valid/                   19 programs that compile (7 of them test --opt, --run or --asm)
+    ├── lexical/                 5 programs with lexical errors
     ├── syntax/                  4 programs with syntax errors
-    └── semantic/                9 programs with semantic errors
+    └── semantic/                10 programs with semantic errors
 ```
 
 `make` writes everything it generates to `build/` (`parser.tab.cpp`, `parser.tab.hpp`, `lex.yy.cpp`, and `minijavac.exe`). That folder is not committed.
@@ -60,6 +60,7 @@ make run                                                # --all on examples/Exam
 
 | Option | Output |
 |---|---|
+| `--headers` | the `import` lines (standard `java.*` / `javax.*` only), their line and package |
 | `--tokens` | token stream |
 | `--ast` | abstract syntax tree |
 | `--symtab` | symbol table |
@@ -86,7 +87,7 @@ Each `tests/<category>/<name>.java` has a matching `<name>.expected` file. Its f
 
 | Folder | Programs |
 |---|---|
-| `valid/` | asm_small, do_while, for_loop, java_wrapper, manual_bare_sample, manual_sample, manual_tac_example, nested_scopes, opt_constant_folding, run_division_by_zero, run_manual_bare_sample, run_stress, smoke, sum_three, switch_case |
-| `lexical/` | bad_character, invalid_identifier, unterminated_comment |
+| `valid/` | asm_small, do_while, for_loop, imports, java_wrapper, manual_bare_sample, manual_sample, manual_tac_example, nested_scopes, opt_constant_folding, run_division_by_zero, run_manual_bare_sample, run_scanner, run_scanner_no_input, run_stress, scanner_tac, smoke, sum_three, switch_case |
+| `lexical/` | bad_character, bad_import, invalid_identifier, scanner_method, unterminated_comment |
 | `syntax/` | missing_class, missing_parenthesis, missing_semicolon, multiple_errors |
-| `semantic/` | break_outside_loop, invalid_assignment, invalid_expression, non_boolean_condition, redeclaration, scope_violation, type_mismatch, undeclared, uninitialized |
+| `semantic/` | break_outside_loop, invalid_assignment, invalid_expression, non_boolean_condition, redeclaration, scanner_errors, scope_violation, type_mismatch, undeclared, uninitialized |

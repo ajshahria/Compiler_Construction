@@ -14,6 +14,7 @@
 #include "backend/backend.h"
 #include "codegen/tac.h"
 #include "common/diagnostics.h"
+#include "imports/imports.h"
 #include "semantic/semantic.h"
 #include "parser.tab.hpp"
 
@@ -36,20 +37,21 @@ extern Node* syntaxRoot;
 
 namespace {
 
-enum class Mode { Tokens, Ast, Symtab, Tac, Opt, Asm, Run, All };
+enum class Mode { Headers, Tokens, Ast, Symtab, Tac, Opt, Asm, Run, All };
 
 void usage(const char* program) {
     std::cerr << "Usage: " << program << " [option] <source-file> [-o output-file]\n"
                  "Options:\n"
-                 "  --tokens      print the token stream (lexical analysis)\n"
+                 "  --headers     list the import lines found (Java's #include)\n"
+                 "  --tokens     print the token stream (lexical analysis)\n"
                  "  --ast         print the abstract syntax tree\n"
                  "  --symtab      print the symbol table after semantic analysis\n"
                  "  --tac         print three address code (default)\n"
                  "  --opt         print optimized three address code\n"
                  "  --asm         print x86 assembly (32-bit, AT&T syntax, MinGW)\n"
                  "  --run         run the program (TAC interpreter) and print its output\n"
-                 "  --all         print every phase: tokens, AST, symbol table, TAC,\n"
-                 "                optimized TAC, assembly and the program output\n"
+                 "  --all         print every phase: tokens, imports, AST, symbol table,\n"
+                 "                TAC, optimized TAC, assembly and the program output\n"
                  "  --emit-files  also write ast.txt, symbols.txt and output.tac (one file per phase)\n"
                  "  --strict      require the Java form 'class Name { public static void main(...) { ... } }'\n"
                  "                (by default the lab manual's bare statements are accepted too)\n"
@@ -66,7 +68,9 @@ const char* tokenCategory(int token) {
     case IF: case ELSE: case WHILE: case FOR: case DO: case SWITCH: case CASE:
     case DEFAULT: case BREAK: case PRINT: case PRINTLN:
     case CLASS: case PUBLIC: case STATIC: case VOID: case MAIN: case STRING:
+    case SCANNER: case NEW: case SYSTEM_IN:
         return "KEYWORD";
+    case SCANNER_READ:  return "METHOD_CALL";
     case EQ: case NE: case LE: case GE: return "RELATIONAL_OP";
     case AND: case OR:                  return "LOGICAL_OP";
     case INC: case DEC:                 return "INCREMENT_OP";
@@ -149,7 +153,8 @@ int main(int argc, char* argv[]) {
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
-        if (arg == "--tokens")                       mode = Mode::Tokens;
+        if (arg == "--headers")                      mode = Mode::Headers;
+        else if (arg == "--tokens")                  mode = Mode::Tokens;
         else if (arg == "--ast")                     mode = Mode::Ast;
         else if (arg == "--symtab")                  mode = Mode::Symtab;
         else if (arg == "--tac")                     mode = Mode::Tac;
@@ -173,6 +178,21 @@ int main(int argc, char* argv[]) {
     }
     std::ostream& out = output ? file : std::cout;
 
+    // ---- Import step: the lexer records each import line as it scans, so
+    // scan the whole file once (the tokens are thrown away) and print them ----
+    if (mode == Mode::Headers) {
+        if (!(yyin = std::fopen(input, "r"))) { std::perror(input); return 2; }
+        while (yylex() != 0) {}
+        std::fclose(yyin);
+        printImports(out);
+        if (lexicalErrors) {
+            out.flush();
+            std::cerr << "Compilation failed: " << lexicalErrors << " lexical error(s).\n";
+            return 1;
+        }
+        return 0;
+    }
+
     // ---- Phase 1: lexical analysis (token listing only) ----
     if (mode == Mode::Tokens || mode == Mode::All) {
         if (!(yyin = std::fopen(input, "r"))) { std::perror(input); return 2; }
@@ -185,6 +205,8 @@ int main(int argc, char* argv[]) {
             return 1;
         }
         if (mode == Mode::Tokens) return 0;
+        heading(out, "IMPORTS");   // --all: recorded by the scan above
+        printImports(out);
         yylineno = 1;   // --all: scan the file again for the parser
     }
 

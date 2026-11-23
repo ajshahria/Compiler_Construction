@@ -1,0 +1,7 @@
+exit 0
+Import                        Line  Package               Role in this compiler
+------------------------------------------------------------------------------------
+java.util.Scanner             3     java.util             accepted (no effect)  - collections, Scanner, Random
+java.util.*                   4     java.util             accepted (no effect)  - collections, Scanner, Random
+java.lang.Math                5     java.lang             always available (no effect)  - core classes (always imported)
+static java.lang.Math.max     6     java.lang             always available (no effect)  - core classes (always imported)

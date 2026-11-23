@@ -4,6 +4,8 @@
 # the matching .expected file. A test can set compiler options on its first
 # line, e.g.  // flags: --manual
 #
+# The program's input for --run can be given on the second line:  // input: 41 1.25
+#
 #   sh tests/run_tests.sh            check all tests (also: make test)
 #   sh tests/run_tests.sh --update   regenerate every .expected file
 #
@@ -29,7 +31,9 @@ for src in tests/valid/*.java tests/lexical/*.java tests/syntax/*.java tests/sem
     expected="${src%.java}.expected"
     # A test can pass compiler options on its first line:  // flags: --manual
     flags=$(sed -n '1s#^// *flags: *##p' "$src" | tr -d '\r')
-    actual=$("$BIN" $flags "$src" 2>&1; echo "exit $?")
+    # ... and the program's input (for --run) on its second line:  // input: 41 1.25
+    input=$(sed -n '2s#^// *input: *##p' "$src" | tr -d '\r')
+    actual=$(printf '%s\n' "$input" | "$BIN" $flags "$src" 2>&1; echo "exit $?")
     # Put the exit status first and drop Windows line endings.
     actual=$(printf '%s\n' "$actual" | tr -d '\r' | sed -n '$p'; printf '%s\n' "$actual" | tr -d '\r' | sed '$d')
 

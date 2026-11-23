@@ -257,6 +257,11 @@ static void gen_stmt(Stmt *s)
         gen_printf(s);
         break;
 
+    case ST_SCANF:                  /* scanf("%d %f", &a, &b) -> read a; read b */
+        for (size_t i = 0; i < s->as.printf_stmt.args->count; i++)
+            emit("read %s\n", s->as.printf_stmt.args->items[i]->tac_name);
+        break;
+
     case ST_ERROR:
         break;
     }

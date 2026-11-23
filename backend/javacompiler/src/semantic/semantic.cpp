@@ -22,6 +22,7 @@
  *   combination must match exactly.
  */
 #include "semantic/semantic.h"
+#include "imports/imports.h"
 #include "symbol_table/symbol_table.h"
 
 #include <algorithm>
@@ -49,6 +50,15 @@ struct SymbolRecord {
     std::string tacName;
 };
 std::vector<SymbolRecord> history;
+
+/* Scanner objects (Scanner sc = new Scanner(System.in);). They only read
+ * input, so they are kept apart from the variables and have no TAC name. */
+struct ScannerRecord {
+    std::string name;
+    int line;
+};
+std::vector<ScannerRecord> scanners;
+bool scannerImportReported = false;
 
 void semanticError(int line, const std::string& message) {
     std::cerr << "line " << line << ": semantic error: " << message << '\n';
@@ -160,7 +170,63 @@ Type checkExpr(Node* n) {
     }
     if (n->kind == "unary") return checkUnary(n);
     if (n->kind == "binary") return checkBinary(n);
+    if (n->kind == "read") {   // a decl/assign with a read as its whole value never gets here
+        semanticError(n->line, n->text + "() can only be used alone on the right of '=' "
+                               "(for example: int n = " + n->text + "();)");
+        return Type::Error;
+    }
     return Type::Error;
+}
+
+/* Scanner sc = new Scanner(System.in); */
+void checkScannerDeclaration(Node* n) {
+    if (!isImported("java.util", "Scanner") && !scannerImportReported) {
+        semanticError(n->line, "cannot find symbol 'Scanner': add 'import java.util.Scanner;' "
+                               "(or 'import java.util.*;') at the top of the file");
+        scannerImportReported = true;    // once, not for every Scanner
+    }
+    for (const ScannerRecord& s : scanners) {
+        if (s.name == n->text) {
+            semanticError(n->line, "redeclaration of Scanner '" + n->text + "' (already declared at line " +
+                                   std::to_string(s.line) + ")");
+            return;
+        }
+    }
+    if (const SymbolInfo* previous = symbols.lookupCurrent(n->text)) {
+        semanticError(n->line, "redeclaration of '" + n->text + "' (already declared at line " +
+                               std::to_string(previous->line) + " in this scope)");
+        return;
+    }
+    scanners.push_back(ScannerRecord{n->text, n->line});
+}
+
+/* The value of `x = sc.nextInt();`: sc must be a Scanner and the method must
+ * read x's type exactly (the TAC 'read x' reads a value of x's type). Returns
+ * the target type when it is correct, Type::Error otherwise. */
+Type checkRead(Node* read, Type target, const std::string& variable) {
+    const std::string& call = read->text;
+    std::string::size_type dot = call.find('.');
+    std::string scanner = call.substr(0, dot), method = call.substr(dot + 1);
+
+    bool known = false;
+    for (const ScannerRecord& s : scanners) known = known || s.name == scanner;
+    if (!known) {
+        if (symbols.lookup(scanner))
+            semanticError(read->line, "'" + scanner + "' is a variable, not a Scanner: '" + method +
+                                      "()' can only be called on a Scanner");
+        else
+            semanticError(read->line, "undeclared Scanner '" + scanner + "' (declare it first: Scanner " +
+                                      scanner + " = new Scanner(System.in);)");
+        return Type::Error;
+    }
+    Type reads = method == "nextInt" ? Type::Int : method == "nextBoolean" ? Type::Bool : Type::Float;
+    if (reads != target) {
+        std::string right = target == Type::Int ? "nextInt" : target == Type::Bool ? "nextBoolean" : "nextFloat";
+        semanticError(read->line, "type mismatch: " + call + "() reads " + withArticle(reads) + ", but '" +
+                                  variable + "' is " + withArticle(target) + " (use " + scanner + "." + right + "())");
+        return Type::Error;
+    }
+    return target;
 }
 
 void checkCondition(Node* condition, const std::string& keyword, int line) {
@@ -194,7 +260,7 @@ void checkDeclaration(Node* n) {
     if (const SymbolInfo* previous = symbols.lookupCurrent(name)) {
         semanticError(n->line, "redeclaration of '" + name + "' (already declared at line " +
                                std::to_string(previous->line) + " in this scope)");
-        if (n->children.size() > 1) checkExpr(n->children[1]);
+        if (n->children.size() > 1 && n->children[1]->kind != "read") checkExpr(n->children[1]);
         return;
     }
 
@@ -206,7 +272,8 @@ void checkDeclaration(Node* n) {
     n->tacName = tacName;
 
     if (n->children.size() > 1) {
-        Type value = checkExpr(n->children[1]);
+        Node* init = n->children[1];
+        Type value = init->kind == "read" ? checkRead(init, type, name) : checkExpr(init);
         if (value == Type::Error) return;
         if (!isAssignable(type, value))
             semanticError(n->line, "type mismatch: cannot initialize " + typeName(type) + " variable '" +
@@ -218,11 +285,13 @@ void checkDeclaration(Node* n) {
 
 void checkAssignment(Node* n) {
     const SymbolInfo* target = symbols.lookup(n->text);
-    Type value = checkExpr(n->children.at(0));
+    Node* source = n->children.at(0);
+    Type value = source->kind == "read" ? Type::Error : checkExpr(source);
     if (!target) {
         reportUnknownName(n->text, n->line);
         return;
     }
+    if (source->kind == "read") value = checkRead(source, target->type, n->text);
     n->tacName = target->tacName;
     if (value == Type::Error) return;
     if (!isAssignable(target->type, value))
@@ -312,6 +381,8 @@ void checkStmt(Node* n) {
         checkIncrement(n);
     } else if (k == "print") {
         checkExpr(n->children.at(0));
+    } else if (k == "scanner") {
+        checkScannerDeclaration(n);
     } else if (k == "if") {
         checkIf(n);
     } else if (k == "while") {
@@ -350,6 +421,8 @@ int analyze(Node* root) {
     breakableDepth = 0;
     nextScopeId = 1;
     history.clear();
+    scanners.clear();
+    scannerImportReported = false;
 
     // The program's statement list is the global scope (scope 0).
     if (root && !root->children.empty())

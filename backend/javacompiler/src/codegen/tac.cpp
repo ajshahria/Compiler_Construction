@@ -195,7 +195,9 @@ private:
         // Variable declaration
         if (node->kind == "decl") {
 
-            if (node->children.size() > 1) {
+            if (node->children.size() > 1 && node->children[1]->kind == "read") {
+                out << "read " << node->tacName << '\n';   // int n = sc.nextInt();
+            } else if (node->children.size() > 1) {
 
                 std::string result =
                     generateExpression(node->children[1]);
@@ -208,6 +210,11 @@ private:
         }
 
         // Assignment
+        if (node->kind == "assign" && node->children[0]->kind == "read") {
+            out << "read " << node->tacName << '\n';       // n = sc.nextInt();
+            return;
+        }
+
         if (node->kind == "assign") {
 
             std::string result =
@@ -348,6 +355,11 @@ private:
 
         if (node->kind == "break") {
             if(!breakLabels.empty()) out<<"goto "<<breakLabels.back()<<'\n';
+            return;
+        }
+
+        // Scanner sc = new Scanner(System.in); only opens the input: no code
+        if (node->kind == "scanner") {
             return;
         }
 

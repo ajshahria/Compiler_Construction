@@ -25,6 +25,7 @@ CPPFLAGS += -I$(SRC_DIR) -I$(BUILD_DIR)
 
 SOURCES := $(SRC_DIR)/main.cpp \
            $(SRC_DIR)/ast/ast.cpp \
+           $(SRC_DIR)/imports/imports.cpp \
            $(SRC_DIR)/semantic/semantic.cpp \
            $(SRC_DIR)/symbol_table/symbol_table.cpp \
            $(SRC_DIR)/codegen/tac.cpp \

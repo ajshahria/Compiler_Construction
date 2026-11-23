@@ -1,0 +1,9 @@
+exit 1
+line 5: semantic error: cannot find symbol 'Scanner': add 'import java.util.Scanner;' (or 'import java.util.*;') at the top of the file
+line 6: semantic error: type mismatch: sc.nextFloat() reads a float, but 'a' is an int (use sc.nextInt())
+line 8: semantic error: type mismatch: sc.nextInt() reads an int, but 'f' is a float (use sc.nextFloat())
+line 9: semantic error: undeclared Scanner 'input' (declare it first: Scanner input = new Scanner(System.in);)
+line 10: semantic error: 'a' is a variable, not a Scanner: 'nextInt()' can only be called on a Scanner
+line 11: semantic error: sc.nextInt() can only be used alone on the right of '=' (for example: int n = sc.nextInt();)
+line 12: semantic error: redeclaration of Scanner 'sc' (already declared at line 5)
+Compilation failed: 7 semantic error(s).
