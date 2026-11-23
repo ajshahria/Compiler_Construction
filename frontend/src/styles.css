@@ -161,7 +161,7 @@ code { background: var(--bar-2); padding: 1px 5px; border-radius: 3px; }
   transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease,
               box-shadow 0.18s ease, transform 0.18s ease;
 }
-.tab:hover:not(:disabled) {
+.tab:hover:not(:disabled):not(.on) {
   background: #37373d; color: #fff; border-color: #555;
   transform: translateY(-1px);
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45);

@@ -13,6 +13,8 @@
  *   assign     variable name   value
  *   inc / dec  variable name   -
  *   print      -               value
+ *   scanner    scanner name    -        (Scanner sc = new Scanner(System.in);)
+ *   read       sc.nextInt ...  -        (only as the whole value of a decl/assign)
  *   if         -               condition, then [, else]
  *   while      -               condition, body
  *   for        -               init?, condition?, update?, body   (may be null)

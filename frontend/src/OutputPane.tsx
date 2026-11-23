@@ -112,7 +112,7 @@ export function OutputPane(p: Props) {
 
       {p.tab === "run" && p.needsInput && (
         <div className="stdin">
-          <label htmlFor="stdin">Program input (cin): type it, then press Compile again</label>
+          <label htmlFor="stdin">Program input (values separated by spaces or new lines): type it, then press Compile again</label>
           <textarea
             id="stdin"
             value={p.stdin}

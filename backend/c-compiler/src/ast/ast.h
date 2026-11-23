@@ -62,6 +62,7 @@ typedef enum {
     ST_FUNCTION, /* Function : int main() { ... }   (C style, bonus) */
     ST_RETURN,   /* Return   : return e;            (C style, bonus) */
     ST_PRINTF,   /* Printf   : printf("...", e, ...); (C style, bonus) */
+    ST_SCANF,    /* Scanf    : scanf("%d", &x, ...);  (C style, bonus) */
     ST_ERROR     /* placeholder left by syntax-error recovery */
 } StmtKind;
 
@@ -91,7 +92,9 @@ struct Stmt {
         StmtList *block;
         struct { Type type; char *name; StmtList *body; } function;
         Expr *ret;                                    /* NULL for `return;` */
-        struct { char *format; ExprList *args; } printf_stmt;   /* format: text between the quotes, escapes kept */
+        /* printf and scanf; format: text between the quotes, escapes kept.
+         * For scanf every argument is an Identifier (the variable after '&'). */
+        struct { char *format; ExprList *args; } printf_stmt;
     } as;
 };
 
@@ -113,6 +116,7 @@ Stmt *ast_error(int line);
 Stmt *ast_function(Type type, char *name, StmtList *body, int line);
 Stmt *ast_return(Expr *value, int line);
 Stmt *ast_printf(char *format, ExprList *args, int line);
+Stmt *ast_scanf(char *format, ExprList *args, int line);
 
 StmtList *ast_list_new(void);
 StmtList *ast_list_append(StmtList *list, Stmt *stmt);

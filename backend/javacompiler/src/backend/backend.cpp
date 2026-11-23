@@ -94,7 +94,7 @@ typedef enum {
     OP_LT, OP_GT, OP_LE, OP_GE, OP_EQ, OP_NE,   /* comparison */
     OP_AND, OP_OR,                              /* logical    */
     OP_NEG, OP_NOT,                             /* unary      */
-    OP_LABEL, OP_GOTO, OP_IFFALSE, OP_IFTRUE, OP_PRINT
+    OP_LABEL, OP_GOTO, OP_IFFALSE, OP_IFTRUE, OP_PRINT, OP_READ
 } OpCode;
 
 /* Operator text for OP_ADD .. OP_NOT, indexed by OpCode. */
@@ -128,7 +128,7 @@ static int is_binary(OpCode op)  { return op >= OP_ADD && op <= OP_OR; }
 static int is_compare(OpCode op) { return op >= OP_LT && op <= OP_NE; }
 static int defines_result(OpCode op)
 {
-    return op == OP_ASSIGN || op == OP_NEG || op == OP_NOT || is_binary(op);
+    return op == OP_ASSIGN || op == OP_READ || op == OP_NEG || op == OP_NOT || is_binary(op);
 }
 static int is_const(const Operand *o)
 {
@@ -237,6 +237,7 @@ static void instr_text(const Instr *in, char *buf, size_t size)
     case OP_IFFALSE: snprintf(buf, size, "ifFalse %s goto %s", a, in->label); break;
     case OP_IFTRUE:  snprintf(buf, size, "if %s goto %s", a, in->label); break;
     case OP_PRINT:   snprintf(buf, size, "print %s", a); break;
+    case OP_READ:    snprintf(buf, size, "read %s", r); break;
     default:         snprintf(buf, size, "%s = %s %s %s", r, a, OP_SYMBOL[in->op], b); break;
     }
 }
@@ -306,6 +307,10 @@ static int parse_line(char *line, Instr *in)
         in->op = OP_PRINT;
         return parse_operand(tok[1], &in->a);
     }
+    if (n == 2 && strcmp(tok[0], "read") == 0) {
+        in->op = OP_READ;
+        return parse_operand(tok[1], &in->result) && in->result.kind == OPD_NAME;
+    }
     if (n >= 3 && n <= 5 && strcmp(tok[1], "=") == 0) {
         if (!parse_operand(tok[0], &in->result) || in->result.kind != OPD_NAME)
             return 0;
@@ -371,7 +376,7 @@ static void resolve_types(TacProgram *p)
                 p->cells[k].type = value;
             in->result.slot = k;
             in->result.type = p->cells[k].type;
-            if (in->op == OP_ASSIGN)
+            if (in->op == OP_ASSIGN || in->op == OP_READ)
                 in->ty = in->result.type;   /* the copy converts to the variable's type */
         }
     }
@@ -677,6 +682,38 @@ static int label_index(const TacProgram *p, const char *label)
     return -1;
 }
 
+/* read x: the next word (separated by spaces or newlines) of the standard
+ * input, as a value of x's type. A missing or wrong word stops the program
+ * with a runtime error, like Java's Scanner. */
+static void read_value(TacType type, Value *r, const char **runtime_error)
+{
+    static char message[160];
+    const char *want = type == TAC_FLOAT ? "a float" : type == TAC_BOOL ? "a bool (true or false)" : "an int";
+    char word[64], *end;
+    r->ty = type; r->iv = 0; r->fv = 0;
+    if (scanf("%63s", word) != 1) {
+        snprintf(message, sizeof message, "Runtime error: no more input (the program wanted %s)", want);
+        *runtime_error = message;
+        return;
+    }
+    int ok;
+    if (type == TAC_FLOAT) {
+        r->fv = strtod(word, &end);
+        ok = end != word && *end == '\0';
+    } else if (type == TAC_BOOL && (strcmp(word, "true") == 0 || strcmp(word, "false") == 0)) {
+        r->iv = word[0] == 't';
+        ok = 1;
+    } else {
+        long long v = strtoll(word, &end, 10);
+        ok = end != word && *end == '\0';
+        r->iv = type == TAC_BOOL ? v != 0 : wrap32(v);
+    }
+    if (!ok) {
+        snprintf(message, sizeof message, "Runtime error: the input '%s' is not %s", word, want);
+        *runtime_error = message;
+    }
+}
+
 char *tac_run(const TacProgram *p, const char **runtime_error)
 {
     Text out = { NULL, 0, 0 };
@@ -722,6 +759,9 @@ char *tac_run(const TacProgram *p, const char **runtime_error)
             else if (a.ty == TAC_BOOL) text_add(&out, "%s\n", a.iv ? "true" : "false");
             else                       text_add(&out, "%ld\n", (long)a.iv);
             continue;
+        case OP_READ:
+            read_value(p->cells[in->result.slot].type, &r, runtime_error);
+            break;
         case OP_ASSIGN:
             r = a;
             break;
@@ -802,6 +842,7 @@ typedef struct {
     double *floats;       /* float constant pool .LF0, .LF1, ... */
     int float_count, float_cap;
     int print_labels;
+    int uses_read;        /* a read was emitted: add the scanf formats to .data */
 } Asm;
 
 static void asm_ins(Asm *g, const char *op, const char *a, const char *b)
@@ -940,6 +981,25 @@ static void emit_print(Asm *g, const Instr *in)
     asm_ins(g, "addl", "$8", "%esp");
 }
 
+/* read x: scanf("%d" or "%f", &x); a bool is read as a number, then made 0/1. */
+static void emit_read(Asm *g, const Instr *in, const char *res)
+{
+    char addr[NAME_LEN + 16];
+    g->uses_read = 1;
+    snprintf(addr, sizeof addr, "$%s", res);
+    asm_ins(g, "pushl", addr, NULL);
+    asm_ins(g, "pushl", in->result.type == TAC_FLOAT ? "$.Lfmt_read_float" : "$.Lfmt_read_int", NULL);
+    asm_ins(g, "call", "_scanf", NULL);
+    asm_ins(g, "addl", "$8", "%esp");
+    if (in->result.type == TAC_BOOL) {
+        asm_ins(g, "movl", res, "%eax");
+        asm_ins(g, "cmpl", "$0", "%eax");
+        asm_ins(g, "setne", "%al", NULL);
+        asm_ins(g, "movzbl", "%al", "%eax");
+        asm_ins(g, "movl", "%eax", res);
+    }
+}
+
 static void emit_instr(Asm *g, const Instr *in)
 {
     char line[3 * NAME_LEN + 32], res[NAME_LEN + 8], a[NAME_LEN + 8], jump[NAME_LEN + 2];
@@ -965,6 +1025,9 @@ static void emit_instr(Asm *g, const Instr *in)
         return;
     case OP_PRINT:
         emit_print(g, in);
+        return;
+    case OP_READ:
+        emit_read(g, in, res);
         return;
     case OP_ASSIGN:
         if (in->result.type == TAC_FLOAT) {
@@ -1027,6 +1090,10 @@ char *tac_assembly(const TacProgram *p, const char *title)
     text_add(&out, ".Lfmt_str:\n    .asciz \"%%s\\n\"\n");
     text_add(&out, ".Lstr_true:\n    .asciz \"true\"\n");
     text_add(&out, ".Lstr_false:\n    .asciz \"false\"\n");
+    if (g.uses_read) {        /* scanf formats, only for a program that reads input */
+        text_add(&out, ".Lfmt_read_int:\n    .asciz \"%%d\"\n");
+        text_add(&out, ".Lfmt_read_float:\n    .asciz \"%%f\"\n");
+    }
     for (int k = 0; k < g.float_count; k++) {
         char v[64];
         snprintf(v, sizeof v, "%.9g", g.floats[k]);

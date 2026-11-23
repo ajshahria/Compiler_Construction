@@ -11,7 +11,7 @@
  * The TAC instruction forms are the ones the front end writes:
  *     x = y            x = - y         x = ! y         x = y op z
  *     L1:              goto L1         ifFalse x goto L1    if x goto L1
- *     print x
+ *     print x          read x   (next word of the input into x)
  * TAC text carries no types, so tac_build gets the declared type of every
  * variable from the symbol table; the type of each temporary is worked out
  * from the instruction that defines it.

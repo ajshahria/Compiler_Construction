@@ -1,0 +1,3 @@
+exit 1
+line 7: lexical error: unsupported method (only nextInt, nextFloat, nextDouble and nextBoolean of a Scanner are supported) 'sc.nextLine'
+Compilation failed: 1 lexical error(s), 0 syntax error(s).

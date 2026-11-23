@@ -68,6 +68,8 @@ static Node* declaration(const char* type, char* name, Node* init, int line) {
 }
 
 %token <str> IDENT INT_LITERAL FLOAT_LITERAL
+%token <str> SCANNER_READ          /* sc.nextInt, sc.nextFloat, ... (the text of the call) */
+%token SCANNER NEW SYSTEM_IN       /* Scanner sc = new Scanner(System.in); */
 %token CLASS PUBLIC STATIC VOID MAIN STRING
 %token INT FLOAT BOOLEAN
 %token IF ELSE WHILE FOR DO SWITCH CASE DEFAULT BREAK PRINT PRINTLN
@@ -132,6 +134,8 @@ statement
     | IDENT DEC ';'                          { $$ = makeNode("dec", $1, @1.first_line); std::free($1); }
     | PRINT expression ';'                   { $$ = makeNode("print", "", @1.first_line, $2); }
     | PRINTLN '(' expression ')' ';'         { $$ = makeNode("print", "", @1.first_line, $3); }
+    | SCANNER IDENT '=' NEW SCANNER '(' SYSTEM_IN ')' ';'
+                                             { $$ = makeNode("scanner", $2, @2.first_line); std::free($2); }
     | IF '(' expression ')' statement %prec LOWER_THAN_ELSE
                                              { $$ = makeNode("if", "", @1.first_line, $3, $5); }
     | IF '(' expression ')' statement ELSE statement
@@ -185,6 +189,7 @@ expression
     | TRUE                                   { $$ = makeNode("literal", "true", @1.first_line); }
     | FALSE                                  { $$ = makeNode("literal", "false", @1.first_line); }
     | IDENT                                  { $$ = makeNode("id", $1, @1.first_line); std::free($1); }
+    | SCANNER_READ '(' ')'                   { $$ = makeNode("read", $1, @1.first_line); std::free($1); }
     | '(' expression ')'                     { $$ = $2; }
     | '-' expression %prec UMINUS            { $$ = makeNode("unary", "-", @1.first_line, $2); }
     | '!' expression                         { $$ = makeNode("unary", "!", @1.first_line, $2); }

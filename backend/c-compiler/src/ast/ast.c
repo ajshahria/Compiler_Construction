@@ -160,6 +160,14 @@ Stmt *ast_printf(char *format, ExprList *args, int line)
     return s;
 }
 
+Stmt *ast_scanf(char *format, ExprList *args, int line)
+{
+    Stmt *s = new_stmt(ST_SCANF, line);
+    s->as.printf_stmt.format = format;
+    s->as.printf_stmt.args = args;
+    return s;
+}
+
 ExprList *ast_expr_list_new(void)
 {
     return allocate(sizeof(ExprList));
@@ -386,6 +394,11 @@ static void print_stmt(Stmt *s, int depth)
         break;
     case ST_PRINTF:
         fprintf(ast_out, "Printf \"%s\" (line %d)\n", s->as.printf_stmt.format, s->line);
+        for (size_t i = 0; s->as.printf_stmt.args && i < s->as.printf_stmt.args->count; i++)
+            print_expr(s->as.printf_stmt.args->items[i], depth + 1);
+        break;
+    case ST_SCANF:
+        fprintf(ast_out, "Scanf \"%s\" (line %d)\n", s->as.printf_stmt.format, s->line);
         for (size_t i = 0; s->as.printf_stmt.args && i < s->as.printf_stmt.args->count; i++)
             print_expr(s->as.printf_stmt.args->items[i], depth + 1);
         break;

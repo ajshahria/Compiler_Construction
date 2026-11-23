@@ -55,12 +55,13 @@ int parser_errors = 0;            /* number of syntax errors reported */
 %token EQ NE LE GE AND OR
 %token <text>    STRING_LITERAL
 %token RETURN VOID PRINTF      /* C style (bonus): int main(), return, printf */
+%token SCANF                   /* C style (bonus): scanf("%d", &x) reads input */
 
 %type <type> type
 %type <expr> expression
 %type <stmt> statement block
 %type <list> statement_list
-%type <args> printf_args
+%type <args> printf_args scanf_args
 
 /* Precedence, lowest to highest. */
 %left OR
@@ -106,13 +107,21 @@ statement
     | RETURN ';'                             { $$ = ast_return(NULL, @1.first_line); }
     | PRINTF '(' STRING_LITERAL printf_args ')' ';'
                                              { $$ = ast_printf($3, $4, @1.first_line); }
-    | error ';'                              { $$ = ast_error(@1.first_line); yyerrok; }
+    | SCANF '(' STRING_LITERAL scanf_args ')' ';'
+                                             { $$ = ast_scanf($3, $4, @1.first_line); }
+    | error ';'                             { $$ = ast_error(@1.first_line); yyerrok; }
     | error '}'                              { $$ = ast_error(@1.first_line); yyerrok; }
     ;
 
 printf_args
     : /* empty */                            { $$ = ast_expr_list_new(); }
     | printf_args ',' expression             { $$ = ast_expr_list_append($1, $3); }
+    ;
+
+/* scanf reads into variables, each passed by address: &x */
+scanf_args
+    : /* empty */                            { $$ = ast_expr_list_new(); }
+    | scanf_args ',' '&' IDENT               { $$ = ast_expr_list_append($1, ast_name($4, @4.first_line)); }
     ;
 
 block

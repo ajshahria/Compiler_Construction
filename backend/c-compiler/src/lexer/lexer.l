@@ -50,23 +50,59 @@ static char *copy_text(const char *text)
 
 /* ----- #include <header> (C style) ----- */
 
-/* The C standard headers this compiler accepts. Only <stdio.h> has an effect
- * (it declares printf); the others are accepted so ordinary C programs compile. */
-static const char *const KNOWN_HEADERS[] = {
-    "assert.h", "ctype.h", "errno.h", "float.h", "limits.h", "math.h", "stdbool.h",
-    "stddef.h", "stdint.h", "stdio.h", "stdlib.h", "string.h", "time.h", NULL
+/* The C standard headers this compiler accepts, with what each one is for.
+ * Only <stdio.h> has an effect (it declares printf); the others are accepted
+ * so ordinary C programs compile, and are listed by --headers. */
+typedef struct { const char *name; const char *category; const char *purpose; } KnownHeader;
+
+static const KnownHeader KNOWN_HEADERS[] = {
+    { "stdio.h",   "I/O",          "printf, scanf" },
+    { "stdlib.h",  "Utilities",    "malloc, rand, exit" },
+    { "string.h",  "Strings",      "strlen, strcpy, strcmp" },
+    { "ctype.h",   "Strings",      "character classification" },
+    { "math.h",    "Math",         "sqrt, pow, sin" },
+    { "time.h",    "Utilities",    "date and time" },
+    { "assert.h",  "Diagnostics",  "assert macro" },
+    { "errno.h",   "Diagnostics",  "error numbers" },
+    { "stdbool.h", "Type support", "bool, true, false" },
+    { "stddef.h",  "Type support", "size_t, NULL" },
+    { "stdint.h",  "Type support", "fixed-width integers" },
+    { "limits.h",  "Type support", "integer limits" },
+    { "float.h",   "Type support", "float limits" },
+    { NULL, NULL, NULL }
 };
 
+/* Every header included so far, in order, with the line of its #include. */
 #define MAX_HEADERS 32
-static char included[MAX_HEADERS][32];
+static const KnownHeader *included[MAX_HEADERS];
+static int included_line[MAX_HEADERS];
 static int included_count = 0;
 
 int header_included(const char *name)
 {
     for (int k = 0; k < included_count; k++)
-        if (strcmp(included[k], name) == 0)
+        if (strcmp(included[k]->name, name) == 0)
             return 1;
     return 0;
+}
+
+/* --headers: a table of the included headers (preprocessor step). */
+void print_headers(FILE *out)
+{
+    if (included_count == 0) {
+        fprintf(out, "(no headers included)\n");
+        return;
+    }
+    fprintf(out, "%-14s %-5s %-13s %s\n", "Header", "Line", "Category", "Role in this compiler");
+    fprintf(out, "------------------------------------------------------------------------\n");
+    for (int k = 0; k < included_count; k++) {
+        char shown[40];
+        snprintf(shown, sizeof shown, "<%s>", included[k]->name);
+        const char *role = strcmp(included[k]->name, "stdio.h") == 0
+                               ? "enables printf" : "accepted (no effect)";
+        fprintf(out, "%-14s %-5d %-13s %s  - %s\n", shown, included_line[k],
+                included[k]->category, role, included[k]->purpose);
+    }
 }
 
 /* A line starting with '#'. Handles   #include <name>   (spaces allowed) and
@@ -96,10 +132,13 @@ static int preprocessor_line(const char *line)
         return used;
     }
     snprintf(name, sizeof name, "%.*s", (int)(close - c - 1), c + 1);
-    for (int k = 0; KNOWN_HEADERS[k] != NULL; k++) {
-        if (strcmp(KNOWN_HEADERS[k], name) == 0) {
-            if (!header_included(name) && included_count < MAX_HEADERS)
-                snprintf(included[included_count++], sizeof included[0], "%s", name);
+    for (int k = 0; KNOWN_HEADERS[k].name != NULL; k++) {
+        if (strcmp(KNOWN_HEADERS[k].name, name) == 0) {
+            /* a repeated #include of the same header is ignored */
+            if (!header_included(name) && included_count < MAX_HEADERS) {
+                included[included_count] = &KNOWN_HEADERS[k];
+                included_line[included_count++] = yylineno;
+            }
             return used;
         }
     }
@@ -168,6 +207,7 @@ ID      {LETTER}({LETTER}|{DIGIT})*
 "return"                { return RETURN; }
 "void"                  { return VOID; }
 "printf"                { return PRINTF; }
+"scanf"                 { return SCANF; }
 "int"                   { return INT; }
 "float"                 { return FLOAT; }
 "bool"                  { return BOOL; }
@@ -199,7 +239,7 @@ ID      {LETTER}({LETTER}|{DIGIT})*
 {ID}                    { yylval.text = copy_text(yytext); return IDENT; }
 
  /* ----- single-character operators and delimiters ----- */
-[-+*/%<>=!(){};,]       { return yytext[0]; }
+[-+*/%<>=!(){};,&]      { return yytext[0]; }   /* '&' only in scanf(..., &x) */
 
  /* ----- anything else is an invalid token ----- */
 .                       { lexical_error("invalid character", yytext); }

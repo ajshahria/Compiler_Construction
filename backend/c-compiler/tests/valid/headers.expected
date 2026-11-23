@@ -1,0 +1,6 @@
+exit 0
+Header         Line  Category      Role in this compiler
+------------------------------------------------------------------------
+<stdio.h>      3     I/O           enables printf  - printf, scanf
+<math.h>       4     Math          accepted (no effect)  - sqrt, pow, sin
+<stdlib.h>     5     Utilities     accepted (no effect)  - malloc, rand, exit

@@ -1,0 +1,8 @@
+exit 1
+line 8: semantic error: type mismatch: '%f' in scanf reads a float, but 'a' is an int (use %d)
+line 9: semantic error: type mismatch: '%d' in scanf reads an int, but 'b' is a float (use %f)
+line 10: semantic error: undeclared variable 'missing'
+line 11: semantic error: scanf format has 2 conversion(s) but 1 variable(s) were given
+line 12: semantic error: scanf format may contain only conversions (%d, %i, %f) and spaces
+line 13: semantic error: unsupported conversion '%.2f' in scanf format (scanf takes no precision: use %f)
+Compilation failed: 6 semantic error(s).

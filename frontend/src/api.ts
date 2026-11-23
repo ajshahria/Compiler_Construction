@@ -9,7 +9,7 @@ export interface Language {
   options: string[];
   built: boolean;
   starter: string;  // program shown the first time the language is picked
-  input: boolean;   // the language can read input (cin)
+  input: boolean;   // the language can read input (cin, scanf, Scanner)
 }
 
 export interface LanguagesResponse {

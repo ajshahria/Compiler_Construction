@@ -1,0 +1,15 @@
+// scanf errors: wrong type for the conversion, an undeclared variable,
+// a wrong number of variables, and text other than spaces in the format.
+#include <stdio.h>
+
+int main() {
+    int a;
+    float b;
+    scanf("%f", &a);
+    scanf("%d", &b);
+    scanf("%d", &missing);
+    scanf("%d %d", &a);
+    scanf("a=%d", &a);
+    scanf("%.2f", &b);
+    return 0;
+}

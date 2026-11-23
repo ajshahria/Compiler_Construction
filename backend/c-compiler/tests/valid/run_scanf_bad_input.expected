@@ -1,0 +1,2 @@
+exit 1
+Runtime error: the input 'abc' is not an int

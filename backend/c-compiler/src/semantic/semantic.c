@@ -256,6 +256,72 @@ static void check_printf(Stmt *s)
     free(types);
 }
 
+/* scanf: only conversions (%d %i for int/bool, %f %g for float) and spaces in
+ * the format, one declared variable (&x) per conversion, of a matching type. */
+static void check_scanf(Stmt *s)
+{
+    const char *format = s->as.printf_stmt.format;
+    ExprList *args = s->as.printf_stmt.args;
+    size_t count = args ? args->count : 0;
+
+    if (!header_included("stdio.h") && !printf_reported) {
+        semantic_error(s->line, "'scanf' is not declared: add #include <stdio.h>");
+        printf_reported = 1;
+    }
+    for (size_t i = 0; i < count; i++)
+        check_expr(args->items[i]);      /* each is a variable: reports an undeclared one */
+
+    size_t pos = 0, used = 0;
+    FormatPiece piece;
+    int result;
+    while ((result = format_next(format, &pos, &piece)) != 0) {
+        if (result < 0 || (piece.is_conversion && piece.precision >= 0)) {
+            if (piece.conversion == 0)
+                semantic_error(s->line, "scanf format ends with an incomplete conversion '%%'");
+            else if (piece.precision >= 0)
+                semantic_error(s->line, "unsupported conversion '%%.%d%c' in scanf format (scanf takes no precision: use %%f)",
+                               piece.precision, piece.conversion);
+            else
+                semantic_error(s->line, "unsupported conversion '%%%c' in scanf format (use %%d, %%i or %%f)",
+                               piece.conversion);
+            return;
+        }
+        if (!piece.is_conversion) {
+            /* only spaces between conversions: \n and \t count as spaces */
+            for (size_t k = 0; k < piece.length; k++) {
+                char c = piece.text[k];
+                if (c == '\\' && k + 1 < piece.length && strchr("nt", piece.text[k + 1]) != NULL) {
+                    k++;
+                    continue;
+                }
+                if (c != ' ') {
+                    semantic_error(s->line, "scanf format may contain only conversions (%%d, %%i, %%f) and spaces");
+                    return;
+                }
+            }
+            continue;
+        }
+        if (used >= count) {
+            used++;
+            continue;
+        }
+        Expr *target = args->items[used++];
+        Type t = target->type;
+        int is_int_conv = piece.conversion == 'd' || piece.conversion == 'i';
+        if (t == TYPE_ERROR)
+            continue;
+        if (is_int_conv && t == TYPE_FLOAT)
+            semantic_error(s->line, "type mismatch: '%%%c' in scanf reads an int, but '%s' is a float (use %%f)",
+                           piece.conversion, target->as.name);
+        else if (!is_int_conv && t != TYPE_FLOAT)
+            semantic_error(s->line, "type mismatch: '%%%c' in scanf reads a float, but '%s' is %s (use %%d)",
+                           piece.conversion, target->as.name, with_article(t));
+    }
+    if (used != count)
+        semantic_error(s->line, "scanf format has %d conversion(s) but %d variable(s) were given",
+                       (int)used, (int)count);
+}
+
 /* A program with main(): only declarations (globals) may stand outside it. */
 static void check_program_shape(StmtList *program)
 {
@@ -362,6 +428,9 @@ static void check_stmt(Stmt *s)
     }
     case ST_PRINTF:
         check_printf(s);
+        break;
+    case ST_SCANF:
+        check_scanf(s);
         break;
     case ST_ERROR:
         break;
