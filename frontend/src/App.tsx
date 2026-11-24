@@ -475,6 +475,7 @@ export default function App() {
             }
             editorTheme={editorTheme}
             fontSize={fontSize}
+            phone={phone}
             fileName={fileName}
             onFileName={setFileName}
             onOpenFile={openFile}
