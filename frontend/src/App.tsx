@@ -10,7 +10,30 @@ import {
   type TabId,
 } from "./api";
 import { EditorPane } from "./EditorPane";
-import { OutputPane } from "./OutputPane";
+import { OutputPane, type AstView, type OptView } from "./OutputPane";
+import { EXAMPLES, type Example } from "./examples";
+import { Pipeline } from "./Pipeline";
+
+/** Which compiler the code is written for, from features only one language has
+ *  (comments and strings ignored), or null for the manual's plain form, which
+ *  every compiler accepts. */
+function detectLanguage(source: string): string | null {
+  const code = source
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/\/\/.*$/gm, " ")
+    .replace(/"(?:\\.|[^"\\\n])*"/g, '""');
+  if (/\bclass\s+\w+\s*\{|System\.out\.print|public\s+static\s+void\s+main|\bimport\s+java\./.test(code)) return "java";
+  if (/\bcout\b|\bcin\b|using\s+namespace|std::|#include\s*<\s*(iostream|vector|string|cmath|cstdlib|cstdio|algorithm|bits\/stdc\+\+\.h)\s*>/.test(code))
+    return "cpp";
+  if (/#include\s*<\s*\w+\.h\s*>|\bprintf\s*\(|\bscanf\s*\(/.test(code)) return "c";
+  return null;
+}
+
+const LANGUAGE_LABELS: Record<string, string> = { c: "C", cpp: "C++", java: "Java" };
+
+type Theme = "dark" | "light";
+const MIN_FONT = 11;
+const MAX_FONT = 26;
 
 /** True if the source reads input (ignoring comments and string literals):
  *  `cin >>` (C++), `scanf(` (C) or a Scanner's `.nextInt()` etc. (Java). */
@@ -70,6 +93,13 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   // (a new storage key, so names saved when C files were called .tri start fresh)
   const [fileNames, setFileNames] = useState<Record<string, string>>(() => load("ce.fileNames", {}));
+  // Projector mode: light theme and a bigger font for the code and every output view.
+  const [theme, setTheme] = useState<Theme>(() => load("ce.theme", "dark"));
+  const [fontSize, setFontSize] = useState<number>(() => load("ce.fontSize", 14));
+  const [astView, setAstView] = useState<AstView>(() => load("ce.astView", "tree"));
+  const [optView, setOptView] = useState<OptView>(() => load("ce.optView", "optimized"));
+  // "lang:detected" pairs the user chose to keep (the notice stays hidden for them)
+  const [keptHere, setKeptHere] = useState<string[]>([]);
 
   const editorRef = useRef<IEditor | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -89,9 +119,15 @@ export default function App() {
   useEffect(() => save("ce.lang", lang), [lang]);
   useEffect(() => save("ce.sources", sources), [sources]);
   useEffect(() => save("ce.stdin", stdin), [stdin]);
+  useEffect(() => save("ce.fontSize", fontSize), [fontSize]);
+  useEffect(() => save("ce.astView", astView), [astView]);
+  useEffect(() => save("ce.optView", optView), [optView]);
+  useEffect(() => {
+    save("ce.theme", theme);
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
+  const editorTheme = theme === "light" ? "explorer-light" : "explorer-dark";
 
-  // The program reads input with `cin >>`: only then is the input text sent.
-  const needsInput = !!language?.input && source !== undefined && readsInput(source);
   // The input box appears only after Compile, and only if the compiled code reads input.
   const [showInput, setShowInput] = useState(false);
   useEffect(() => save("ce.split", split), [split]);
@@ -106,14 +142,19 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [language?.id]);
 
-  const runCompile = useCallback(() => {
-    if (!language || source === undefined) return;
+  // Compiles the editor's code, or `override` (a just-loaded example, before
+  // the editor state has caught up).
+  const runCompile = useCallback((override?: { source: string; stdin: string }) => {
+    const code = override?.source ?? source;
+    const input = override?.stdin ?? stdin;
+    if (!language || code === undefined) return;
+    const reads = !!language.input && readsInput(code);
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setBusy(true);
-    setShowInput(needsInput);
-    compile({ language: language.id, source, options: [], stdin: needsInput ? stdin : "" }, ctrl.signal)
+    setShowInput(reads);
+    compile({ language: language.id, source: code, options: [], stdin: reads ? input : "" }, ctrl.signal)
       .then((r) => {
         setResult(r);
         setFailure("");
@@ -126,9 +167,30 @@ export default function App() {
       .finally(() => {
         if (abortRef.current === ctrl) setBusy(false);
       });
-  }, [language, source, stdin, needsInput]);
+  }, [language, source, stdin]);
 
   compileRef.current = runCompile;
+
+  // An example replaces the code (the editor keeps it on its undo stack, so
+  // Ctrl+Z brings the old code back), fills the program input it needs and
+  // selects the tab that demonstrates it. It does not compile: the old output
+  // is cleared and nothing runs until Compile or Ctrl+Enter.
+  const loadExample = (ex: Example) => {
+    if (!language) return;
+    const editor = editorRef.current;
+    const model = editor?.getModel();
+    if (editor && model) {
+      editor.pushUndoStop();
+      editor.executeEdits("examples", [{ range: model.getFullModelRange(), text: ex.source }]);
+      editor.pushUndoStop();
+      editor.setPosition({ lineNumber: 1, column: 1 });
+      editor.revealLine(1);
+    }
+    setSources((all) => ({ ...all, [language.id]: ex.source }));
+    if (ex.stdin !== undefined) setStdin(ex.stdin);
+    setTab(ex.tab);
+    clearOutput();
+  };
 
   // Code is compiled only when the user asks (Compile button or Ctrl+Enter).
   // Output that belongs to other code is cleared: when the language changes
@@ -243,6 +305,50 @@ export default function App() {
   };
   saveFileRef.current = saveFile;
 
+  // The code looks like another language (e.g. C code with Java selected).
+  const detected = source !== undefined ? detectLanguage(source) : null;
+  const mismatch =
+    language && detected && detected !== language.id && meta?.languages.some((l) => l.id === detected)
+    && !keptHere.includes(`${language.id}:${detected}`)
+      ? detected
+      : null;
+
+  // Selects the other language, then (once its editor shows that language's
+  // own code) replaces the text with this code as one edit, so a single
+  // Ctrl+Z there brings that language's old code back.
+  const pendingMove = useRef<string | null>(null);
+  const moveCodeTo = (target: string) => {
+    if (source === undefined || !meta?.languages.some((l) => l.id === target)) return;
+    pendingMove.current = source;
+    setLang(target);
+  };
+  useEffect(() => {
+    if (pendingMove.current === null || !language) return;
+    // The editor switches to the new language's file in its own effects, so
+    // wait (a few short ticks at most) until it really shows that file.
+    let timer = 0;
+    let tries = 0;
+    const apply = () => {
+      const code = pendingMove.current;
+      const editor = editorRef.current;
+      const model = editor?.getModel();
+      if (code === null || !editor || !model) return;
+      if (!model.uri.path.endsWith(`source-${language.id}${language.extension}`) && tries++ < 20) {
+        timer = window.setTimeout(apply, 15);
+        return;
+      }
+      pendingMove.current = null;
+      editor.pushUndoStop();
+      editor.executeEdits("move-language", [{ range: model.getFullModelRange(), text: code }]);
+      editor.pushUndoStop();
+      // store it under the new language here too: the editor's change event may
+      // still be wired to the previous language for this one edit
+      setSources((all) => ({ ...all, [language.id]: code }));
+    };
+    timer = window.setTimeout(apply, 0);
+    return () => window.clearTimeout(timer);
+  }, [language?.id]);   // eslint-disable-line react-hooks/exhaustive-deps
+
   const jump = (e: CompileError) => {
     const ed = editorRef.current;
     if (!ed || e.line == null) return;
@@ -278,7 +384,21 @@ export default function App() {
           <span>C · C++ · Java</span>
         </nav>
         <span className="spacer" />
-        <span className="muted small">Lexer → Parser → AST → Symbol table → TAC</span>
+        {language && (
+          <Pipeline result={result} busy={busy} failure={failure} available={language.tabs} onOpen={setTab} />
+        )}
+        <div className="view-controls" aria-label="View">
+          <button className="view-btn" onClick={() => setFontSize((f) => Math.max(MIN_FONT, f - 1))}
+                  disabled={fontSize <= MIN_FONT} title="Smaller text" aria-label="Smaller text">A−</button>
+          <span className="font-size small" title="Code font size">{fontSize}</span>
+          <button className="view-btn" onClick={() => setFontSize((f) => Math.min(MAX_FONT, f + 1))}
+                  disabled={fontSize >= MAX_FONT} title="Bigger text (for a projector)" aria-label="Bigger text">A+</button>
+          <button className="view-btn" onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+                  title={theme === "dark" ? "Light theme (easier to read on a projector)" : "Dark theme"}
+                  aria-label={theme === "dark" ? "Switch to the light theme" : "Switch to the dark theme"}>
+            {theme === "dark" ? "☀ Light" : "☾ Dark"}
+          </button>
+        </div>
       </header>
 
       {metaError ? (
@@ -297,8 +417,21 @@ export default function App() {
             source={source ?? ""}
             onSource={(s) => setSources((all) => ({ ...all, [language.id]: s }))}
             onMount={onMount}
-            onCompile={runCompile}
+            onCompile={() => runCompile()}
             busy={busy}
+            examples={EXAMPLES[language.id] ?? []}
+            onExample={loadExample}
+            notice={
+              mismatch
+                ? {
+                    label: LANGUAGE_LABELS[mismatch] ?? mismatch,
+                    onSwitch: () => moveCodeTo(mismatch),
+                    onDismiss: () => setKeptHere((k) => [...k, `${language.id}:${mismatch}`]),
+                  }
+                : null
+            }
+            editorTheme={editorTheme}
+            fontSize={fontSize}
             fileName={fileName}
             onFileName={setFileName}
             onOpenFile={openFile}
@@ -318,6 +451,13 @@ export default function App() {
             stdin={stdin}
             onStdin={setStdin}
             onJump={jump}
+            editorTheme={editorTheme}
+            fontSize={fontSize}
+            astView={astView}
+            onAstView={setAstView}
+            optView={optView}
+            onOptView={setOptView}
+            onCompile={() => runCompile()}
           />
         </main>
       )}

@@ -1,6 +1,7 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Editor, { type OnMount } from "@monaco-editor/react";
 import type { Language } from "./api";
+import type { Example } from "./examples";
 
 interface Props {
   fileName: string;
@@ -16,12 +17,75 @@ interface Props {
   onMount: OnMount;
   onCompile: () => void;
   busy: boolean;
+  examples: Example[];
+  onExample: (e: Example) => void;
+  editorTheme: string;
+  /* The code looks like another language: offer to move it there. */
+  notice: { label: string; onSwitch: () => void; onDismiss: () => void } | null;
+  fontSize: number;
+}
+
+/* "Examples ▾": a drop-down of ready-made programs for the current language.
+ * Picking one only loads it (Ctrl+Z brings the old code back); it runs when
+ * the user presses Compile. */
+function ExamplesMenu({ examples, onPick }: { examples: Example[]; onPick: (e: Example) => void }) {
+  const [open, setOpen] = useState(false);
+  const wrap = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: Event) => {
+      if (e instanceof KeyboardEvent ? e.key === "Escape" : !wrap.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, [open]);
+
+  const groups = ["Valid programs", "Error handling"] as const;
+  return (
+    <div className="menu-wrap" ref={wrap}>
+      <button
+        className={`file-btn ${open ? "open" : ""}`}
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title="Load a ready-made program"
+      >
+        Examples ▾
+      </button>
+      {open && (
+        <div className="examples-menu" role="menu">
+          {groups.map((g) => (
+            <div key={g}>
+              <h4>{g}</h4>
+              {examples.filter((e) => e.group === g).map((e) => (
+                <button key={e.id} role="menuitem" onClick={() => { setOpen(false); onPick(e); }}>
+                  <span className={`dot ${g === "Error handling" ? "dot-error" : "dot-valid"}`} />
+                  {e.title}
+                </button>
+              ))}
+            </div>
+          ))}
+          <p className="note">Loads it into the editor; press Compile to run it. Ctrl+Z restores your code.</p>
+        </div>
+      )}
+    </div>
+  );
 }
 
 const LABELS: Record<string, string> = { c: "C", cpp: "C++", java: "Java" };
 
 export function EditorPane(p: Props) {
   const fileInput = useRef<HTMLInputElement>(null);
+  const [cursor, setCursor] = useState({ line: 1, column: 1 });
+  const onMount: OnMount = (editor, monacoApi) => {
+    editor.onDidChangeCursorPosition((e) => setCursor({ line: e.position.lineNumber, column: e.position.column }));
+    p.onMount(editor, monacoApi);
+  };
   return (
     <section className="pane">
       <div className="pane-title file-bar">
@@ -43,6 +107,7 @@ export function EditorPane(p: Props) {
           <button className="file-btn" onClick={p.onSaveFile} title="Save to your device (Ctrl+S)">
             Save
           </button>
+          <ExamplesMenu examples={p.examples} onPick={p.onExample} />
           <input
             ref={fileInput}
             type="file"
@@ -70,20 +135,31 @@ export function EditorPane(p: Props) {
             </button>
           ))}
         </div>
-        <button className="btn compile-btn" onClick={p.onCompile} disabled={p.busy} title="Compile (Ctrl+Enter)">
-          ▶ Compile
-        </button>
+        <div className="compile-wrap">
+          <button className="btn compile-btn" onClick={p.onCompile} disabled={p.busy} title="Compile (Ctrl+Enter)">
+            ▶ Compile
+          </button>
+        </div>
       </div>
+      {p.notice && (
+        <div className="lang-notice" role="status">
+          <span>
+            This looks like <b>{p.notice.label}</b> code, but the <b>{LABELS[p.language.id] ?? p.language.id}</b> compiler is selected.
+          </span>
+          <button className="notice-btn" onClick={p.notice.onSwitch}>Move it to {p.notice.label}</button>
+          <button className="notice-close" onClick={p.notice.onDismiss} title="Keep it here" aria-label="Dismiss">×</button>
+        </div>
+      )}
       <div className="editor-wrap">
         <Editor
-          theme="explorer-dark"
+          theme={p.editorTheme}
           language={p.language.monaco}
           path={`source-${p.language.id}${p.language.extension}`}
           value={p.source}
           onChange={(v) => p.onSource(v ?? "")}
-          onMount={p.onMount}
+          onMount={onMount}
           options={{
-            fontSize: 14,
+            fontSize: p.fontSize,
             minimap: { enabled: false },
             scrollBeyondLastLine: false,
             automaticLayout: true,
@@ -93,7 +169,7 @@ export function EditorPane(p: Props) {
       </div>
       <div className="statusbar">
         <span className="spacer" />
-        <span className="muted">Ctrl+Enter to compile</span>
+        <span className="cursor-pos">Ln {cursor.line}, Col {cursor.column}</span>
       </div>
     </section>
   );
