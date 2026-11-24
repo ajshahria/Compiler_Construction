@@ -184,6 +184,7 @@ export function AstTree({ text, onJump }: Props) {
 
   // Drag on the background to pan.
   const startPan = (e: React.PointerEvent) => {
+    if (e.pointerType === "touch") return;   // a finger already scrolls the view natively
     if ((e.target as Element).closest(".ast-node, .ast-toggle")) return;
     const view = viewRef.current!;
     const start = { x: e.clientX, y: e.clientY, left: view.scrollLeft, top: view.scrollTop };

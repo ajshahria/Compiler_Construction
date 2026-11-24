@@ -32,6 +32,21 @@ function detectLanguage(source: string): string | null {
 const LANGUAGE_LABELS: Record<string, string> = { c: "C", cpp: "C++", java: "Java" };
 
 type Theme = "dark" | "light";
+type MobilePane = "code" | "output";
+
+const PHONE_QUERY = "(max-width: 800px)";
+
+/** True while the window is phone-sized (the layout then shows one pane at a time). */
+function usePhoneLayout(): boolean {
+  const [phone, setPhone] = useState(() => window.matchMedia(PHONE_QUERY).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(PHONE_QUERY);
+    const update = () => setPhone(mq.matches);
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  return phone;
+}
 const MIN_FONT = 11;
 const MAX_FONT = 26;
 
@@ -98,6 +113,11 @@ export default function App() {
   const [fontSize, setFontSize] = useState<number>(() => load("ce.fontSize", 14));
   const [astView, setAstView] = useState<AstView>(() => load("ce.astView", "tree"));
   const [optView, setOptView] = useState<OptView>(() => load("ce.optView", "optimized"));
+  // On a phone only one pane is shown: the code or the output.
+  const phone = usePhoneLayout();
+  const [mobilePane, setMobilePane] = useState<MobilePane>("code");
+  const phoneRef = useRef(phone);
+  phoneRef.current = phone;
   // "lang:detected" pairs the user chose to keep (the notice stays hidden for them)
   const [keptHere, setKeptHere] = useState<string[]>([]);
 
@@ -154,6 +174,7 @@ export default function App() {
     abortRef.current = ctrl;
     setBusy(true);
     setShowInput(reads);
+    if (phoneRef.current) setMobilePane("output");   // on a phone, show the result
     compile({ language: language.id, source: code, options: [], stdin: reads ? input : "" }, ctrl.signal)
       .then((r) => {
         setResult(r);
@@ -352,10 +373,27 @@ export default function App() {
   const jump = (e: CompileError) => {
     const ed = editorRef.current;
     if (!ed || e.line == null) return;
-    ed.revealLineInCenter(e.line);
-    ed.setPosition({ lineNumber: e.line, column: 1 });
-    ed.focus();
+    const line = e.line;
+    const go = () => {
+      ed.layout();
+      ed.revealLineInCenter(line);
+      ed.setPosition({ lineNumber: line, column: 1 });
+      ed.focus();
+    };
+    if (phoneRef.current && mobilePane !== "code") {
+      setMobilePane("code");          // the editor is hidden on a phone: show it first
+      window.setTimeout(go, 50);
+    } else {
+      go();
+    }
   };
+
+  // A pipeline step opens its tab (and, on a phone, the output pane).
+  const openTab = (t: TabId) => {
+    setTab(t);
+    if (phoneRef.current) setMobilePane("output");
+  };
+  const errorCount = result?.errors.length ?? 0;
 
 
   const startDrag = (e: React.PointerEvent) => {
@@ -385,7 +423,7 @@ export default function App() {
         </nav>
         <span className="spacer" />
         {language && (
-          <Pipeline result={result} busy={busy} failure={failure} available={language.tabs} onOpen={setTab} />
+          <Pipeline result={result} busy={busy} failure={failure} available={language.tabs} onOpen={openTab} />
         )}
         <div className="view-controls" aria-label="View">
           <button className="view-btn" onClick={() => setFontSize((f) => Math.max(MIN_FONT, f - 1))}
@@ -396,7 +434,8 @@ export default function App() {
           <button className="view-btn" onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
                   title={theme === "dark" ? "Light theme (easier to read on a projector)" : "Dark theme"}
                   aria-label={theme === "dark" ? "Switch to the light theme" : "Switch to the dark theme"}>
-            {theme === "dark" ? "☀ Light" : "☾ Dark"}
+            {theme === "dark" ? "☀" : "☾"}
+            <span className="theme-label">{theme === "dark" ? " Light" : " Dark"}</span>
           </button>
         </div>
       </header>
@@ -409,7 +448,11 @@ export default function App() {
       ) : !meta || !language ? (
         <div className="fatal muted">Loading…</div>
       ) : (
-        <main className="main" style={{ gridTemplateColumns: `${split}% 6px 1fr` }}>
+        <>
+        <main
+          className={phone ? `main phone show-${mobilePane}` : "main"}
+          style={phone ? undefined : { gridTemplateColumns: `${split}% 6px 1fr` }}
+        >
           <EditorPane
             languages={meta.languages}
             language={language}
@@ -458,8 +501,27 @@ export default function App() {
             optView={optView}
             onOptView={setOptView}
             onCompile={() => runCompile()}
+            phone={phone}
+            visible={!phone || mobilePane === "output"}
           />
         </main>
+        {phone && (
+          <nav className="mobile-nav" aria-label="Pane">
+            <button className={mobilePane === "code" ? "on" : ""} onClick={() => setMobilePane("code")}
+                    aria-pressed={mobilePane === "code"}>
+              <span aria-hidden="true">{"</>"}</span> Code
+            </button>
+            <button className="btn mobile-compile compile-btn" onClick={() => runCompile()} disabled={busy}>
+              {busy ? "Compiling…" : "▶ Compile"}
+            </button>
+            <button className={mobilePane === "output" ? "on" : ""} onClick={() => setMobilePane("output")}
+                    aria-pressed={mobilePane === "output"}>
+              Output
+              {errorCount > 0 && <span className="badge">{errorCount}</span>}
+            </button>
+          </nav>
+        )}
+        </>
       )}
     </div>
   );
