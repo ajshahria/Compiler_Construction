@@ -477,9 +477,73 @@ kbd {
   .topbar { gap: 14px; }
 }
 
+/* ---------- Phone layout (≤ 800px): one pane at a time ---------- */
+.app { height: 100vh; height: 100dvh; }   /* dvh: the visible height on phones */
+.mobile-nav { display: none; }
+
 @media (max-width: 800px) {
-  .main { grid-template-columns: 1fr !important; grid-template-rows: 1fr 1fr; }
-  .splitter { display: none; }
-  .topbar .pipeline { display: none; }
-  .topbar { gap: 12px; }
+  /* Top bar: smaller logo, the pipeline as a second, scrollable row. */
+  .topbar { flex-wrap: wrap; height: auto; padding: 6px 10px; gap: 6px 10px; row-gap: 6px; }
+  .logo-mark { height: 34px; }
+  .logo-word { height: 22px; }
+  .menu, .pipe-note, .font-size, .theme-label { display: none; }
+  .topbar .spacer { display: block; }
+  .view-btn { height: 30px; min-width: 32px; padding: 0 9px; }
+  .topbar .pipeline {
+    order: 10; width: 100%; overflow-x: auto; padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+  .topbar .pipeline::-webkit-scrollbar { display: none; }
+  .pipe-step { padding: 3px 9px; }
+
+  /* Main: only the chosen pane is shown; the bottom bar switches. */
+  .main.phone { display: block; position: relative; }
+  .main.phone > .pane { position: absolute; inset: 0; }
+  .main.phone.show-code > .pane:last-child,
+  .main.phone.show-output > .pane:first-child { display: none; }
+  .main.phone .splitter { display: none; }
+
+  /* Editor toolbar: the Compile button lives in the bottom bar. */
+  .main.phone .editor-toolbar .compile-wrap { display: none; }
+  .editor-toolbar { padding: 6px 8px; gap: 8px; }
+  .editor-toolbar .file-actions { gap: 5px; }
+  .file-btn { padding: 0 12px; }
+  .lang-toggle button { padding: 0 12px; }
+  .examples-menu { position: fixed; left: 8px; right: 8px; top: auto; min-width: 0; max-height: 70vh; overflow: auto; }
+
+  /* Output tabs: one row that scrolls sideways. */
+  .tabs { flex-wrap: nowrap; overflow-x: auto; padding: 7px 8px; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab-group { flex-wrap: nowrap; }
+  .tab { white-space: nowrap; flex: none; }
+
+  /* Views that need less room on a small screen. */
+  .ast-legend, .shortcuts { display: none; }
+  .ast-zoom { left: 8px; bottom: 8px; }
+  .view-switch { top: 6px; right: 10px; }
+  .compare.inline .compare-head { grid-template-columns: 1fr; text-align: center; }
+  .compare.inline .compare-head span:first-child,
+  .compare.inline .compare-head span:last-child { display: none; }
+  .welcome { padding: 12px; place-items: start center; }
+  .welcome-card { padding: 16px 18px; }
+  .welcome-card h2 { font-size: 17px; }
+  .lang-notice { padding: 6px 10px; }
+
+  /* Bottom bar: Code | Compile | Output. */
+  .mobile-nav {
+    display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px;
+    padding: 7px 10px calc(7px + env(safe-area-inset-bottom));
+    background: var(--bar); border-top: 1px solid var(--border);
+    box-shadow: 0 -4px 14px var(--shadow);
+  }
+  .mobile-nav > button:not(.btn) {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    height: 36px; border-radius: 999px; cursor: pointer; font-weight: 600;
+    background: var(--bar-2); color: var(--text-soft); border: 1px solid var(--pill-border);
+    transition: background 0.18s ease, color 0.18s ease;
+  }
+  .mobile-nav > button.on {
+    background: linear-gradient(180deg, var(--accent-hi), var(--accent-2)); color: #fff; border-color: var(--accent-edge);
+  }
+  .mobile-compile { height: 38px; padding: 0 18px; font-weight: 700; white-space: nowrap; }
 }

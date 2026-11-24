@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import Editor, { DiffEditor } from "@monaco-editor/react";
 import type { CompileError, CompileResult, Language, TabId } from "./api";
 import { AstTree } from "./AstTree";
@@ -24,6 +25,8 @@ interface Props {
   onAstView: (v: AstView) => void;
   optView: OptView;
   onOptView: (v: OptView) => void;
+  phone: boolean;           // phone layout: one row of tabs, compare shown inline
+  visible: boolean;         // false while a phone shows the code pane instead
 }
 
 /* The tabs in the order of the pipeline: the front end the lab manual
@@ -95,6 +98,15 @@ export function OutputPane(p: Props) {
   const canCompare = p.tab === "opt" && !!tacText && !!optText;
   const notCompiled = !p.result && !p.busy && !p.failure;
 
+  // On a phone the tabs are one scrolling row: keep the selected tab in view.
+  const tabsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!p.visible) return;    // a hidden row cannot scroll
+    const row = tabsRef.current;
+    const on = row?.querySelector<HTMLElement>(".tab.on");
+    if (row && on) row.scrollLeft = on.offsetLeft - (row.clientWidth - on.offsetWidth) / 2;
+  }, [p.tab, p.phone, p.visible]);
+
   let status;
   if (p.busy) status = <span className="muted">Compiling…</span>;
   else if (p.failure) status = <span className="bad">✕ {p.failure}</span>;
@@ -127,7 +139,7 @@ export function OutputPane(p: Props) {
     const before = instructionCount(tacText);
     const after = instructionCount(optText);
     body = (
-      <div className="compare">
+      <div className={p.phone ? "compare inline" : "compare"}>
         <div className="compare-head">
           <span>TAC (before)</span>
           <span className="compare-sum">
@@ -146,8 +158,9 @@ export function OutputPane(p: Props) {
             modifiedModelPath="compare-after.tac"
             options={{
               ...viewerOptions,
-              renderSideBySide: true,
-              useInlineViewWhenSpaceIsLimited: false,   // keep two columns under the headers
+              // two columns under the headers; one column on a phone
+              renderSideBySide: !p.phone,
+              useInlineViewWhenSpaceIsLimited: false,
               originalEditable: false,
               ignoreTrimWhitespace: true,
               renderOverviewRuler: false,
@@ -197,7 +210,7 @@ export function OutputPane(p: Props) {
       <div className="pane-title">
         <span>{p.language.name}</span>
       </div>
-      <div className="tabs" role="tablist">
+      <div className="tabs" role="tablist" ref={tabsRef}>
         {GROUPS.map((g) => (
           <div key={g.name} className="tab-group" role="group" aria-label={g.name} title={g.title}>
             {g.ids.map((id) => {
