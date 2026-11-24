@@ -59,4 +59,14 @@ monaco.editor.defineTheme("explorer-dark", {
   },
 });
 
+monaco.editor.defineTheme("explorer-light", {
+  base: "vs",
+  inherit: true,
+  rules: [],
+  colors: {
+    "editor.background": "#ffffff",
+    "editorGutter.background": "#ffffff",
+  },
+});
+
 export { monaco };
