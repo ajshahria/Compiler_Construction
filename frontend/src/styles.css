@@ -546,4 +546,26 @@ kbd {
     background: linear-gradient(180deg, var(--accent-hi), var(--accent-2)); color: #fff; border-color: var(--accent-edge);
   }
   .mobile-compile { height: 38px; padding: 0 18px; font-weight: 700; white-space: nowrap; }
+  /* the cursor position is not worth a row on a phone */
+  .main.phone .pane:first-child .statusbar { display: none; }
+}
+
+/* Small phones (≤ 360px, e.g. 320px iPhone SE 1st gen, 280px Galaxy Fold):
+ * logo and view buttons share one row, everything a little tighter. */
+@media (max-width: 360px) {
+  .topbar { padding: 5px 8px; gap: 5px 6px; }
+  .logo { gap: 3px; }
+  .logo-mark { height: 28px; }
+  .logo-word { height: 17px; }
+  .view-controls { gap: 4px; }
+  .view-btn { height: 28px; min-width: 28px; padding: 0 6px; font-size: 12px; }
+  .pipe-step { padding: 2px 7px; font-size: 11px; }
+  .file-btn { padding: 0 9px; height: 28px; font-size: 12px; }
+  .lang-toggle button { padding: 0 10px; height: 24px; font-size: 12px; }
+  .editor-toolbar { padding: 5px 6px; gap: 6px; min-height: 0; }
+  .tab { padding: 3px 10px; font-size: 12px; }
+  .mobile-nav { gap: 6px; padding-left: 6px; padding-right: 6px; }
+  .mobile-nav > button:not(.btn) { height: 34px; font-size: 12.5px; }
+  .mobile-compile { height: 36px; padding: 0 12px; font-size: 13px; }
+  .lang-notice { font-size: 12px; gap: 6px; }
 }

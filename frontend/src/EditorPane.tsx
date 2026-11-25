@@ -20,6 +20,7 @@ interface Props {
   examples: Example[];
   onExample: (e: Example) => void;
   editorTheme: string;
+  phone: boolean;   // narrow gutter, no code folding: more room for the code
   /* The code looks like another language: offer to move it there. */
   notice: { label: string; onSwitch: () => void; onDismiss: () => void } | null;
   fontSize: number;
@@ -164,6 +165,9 @@ export function EditorPane(p: Props) {
             scrollBeyondLastLine: false,
             automaticLayout: true,
             tabSize: 4,
+            ...(p.phone
+              ? { lineNumbersMinChars: 2, lineDecorationsWidth: 6, folding: false, glyphMargin: false }
+              : {}),
           }}
         />
       </div>
