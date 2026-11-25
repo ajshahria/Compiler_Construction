@@ -1,93 +1,189 @@
-# MiniJava Compiler
+# minijavac: the Java compiler
 
-A compiler front-end for the lab manual's mini language, written in C++ with Flex and Bison. A program is either a bare list of statements, exactly as in the manual's sample program, or a `class` with `main` (`--strict` accepts only the class form); inside it, statements can be written exactly as in the manual (`bool`, `print x;`) or in Java style (`boolean`, `System.out.println(x);`). Input is read Java style: `import java.util.Scanner;`, `Scanner sc = new Scanner(System.in);`, then `int n = sc.nextInt();` (also `nextFloat`, `nextDouble`, `nextBoolean`); each read becomes a TAC `read n`, and `--run` reads standard input. Its front end produces Three Address Code, the output the manual requires; an extra back end can then optimize the TAC, translate it to x86 assembly, or run it:
+**Author:** Saima Suchi · part of [Tricora](../../readme.md), the Compiler Construction Lab project
+
+`minijavac` is a compiler front-end with intermediate code generation for the lab manual's mini language. It is written in **C++17** with **Flex** and **Bison**. It takes a program written exactly as in the manual, or the same program written as Java (a `class` with `main`, `System.out.println`, `Scanner` input, …), and produces **Three Address Code (TAC)**, the output the manual requires. An optional back end (bonus) can then optimize that TAC, run it, or translate it to x86 assembly.
 
 ```text
-source (.java) -> lexer -> parser/AST -> semantic analysis (symbol table) -> Three Address Code
-                 -> back end: optimized TAC (--opt), x86 assembly (--asm), program output (--run)
+source file
+  │
+  ├─► Lexer (Flex)              src/lexer/lexer.l       tokens, import lines, lexical errors
+  ├─► Parser (Bison)            src/parser/parser.y     Abstract Syntax Tree, syntax errors, recovery
+  ├─► Semantic analysis         src/semantic/  +  src/symbol_table/    scope, type and initialization errors
+  ├─► TAC generation            src/codegen/            Three Address Code  ◄── required output
+  │
+  └─► Back end (bonus)          src/backend/            --opt optimized TAC · --run program output · --asm x86
+```
+
+## What it accepts
+
+**The manual's language (section 5).** A bare list of statements, exactly like the manual's sample program, is accepted with no flags. Inside a class, the manual's spellings `bool` and `print x;` still work.
+
+**The same program as Java (bonus):**
+
+| Feature | Example | Notes |
+|---|---|---|
+| Class wrapper | `class Main { public static void main(String[] args) { ... } }` | `--strict` makes the wrapper compulsory. |
+| Types | `int`, `float`, `boolean` (`bool` also works) | An `int` value may be stored in a `float` variable; every other mix is an error. |
+| Output | `System.out.println(x);` | `print x;` also works. |
+| Loops and branches | `for`, `do-while`, `switch` / `case` / `default`, `break` | `break` is only allowed inside a loop or `switch`. |
+| Operators | `i++`, `i--` | |
+| Imports | `import java.util.Scanner;`, `import java.util.*;`, `import static java.lang.Math.max;` | Only standard `java.*` and `javax.*` packages. An import must come before the class. `--headers` lists them. |
+| Input | `Scanner sc = new Scanner(System.in);` then `int n = sc.nextInt();` | Needs `import java.util.Scanner;` (or `java.util.*`). `nextInt`, `nextFloat`, `nextDouble` (read as a `float`) and `nextBoolean`. A read must be the whole right side of `=`, and its type must match the variable. |
+| Java rule | `int total; total = total + 1;` | A variable must be given a value before it is used ("might not have been initialized"). |
+
+The full grammar of the core language (BNF, precedence table, dangling-else rule, lexical rules and error recovery) is in [`docs/language-grammar.md`](docs/language-grammar.md).
+
+## Requirements
+
+`g++` with C++17, `make`, `flex` and `bison` (Bison 2.4 or newer).
+
+```sh
+sudo apt install build-essential flex bison      # Ubuntu / Debian
+```
+
+## Build
+
+```sh
+make            # writes build/minijavac (build/minijavac.exe on Windows)
+make clean      # deletes build/ and any files written by --emit-files
+```
+
+Everything `make` generates (`parser.tab.cpp`, `parser.tab.hpp`, `lex.yy.cpp`, the executable) goes to `build/`, which is not committed.
+
+## Run
+
+```sh
+./build/minijavac tests/valid/manual_sample.java          # Three Address Code (the default)
+./build/minijavac tests/valid/manual_bare_sample.java     # the manual's sample, no class
+./build/minijavac --all examples/Example.java             # every phase
+make run                                                  # the same: --all on examples/Example.java
+echo "3 2.5" | ./build/minijavac --run Program.java       # with input for a Scanner
+./build/minijavac examples/Example.java -o out.tac        # write the output to a file
+```
+
+| Option | Output |
+|---|---|
+| `--headers` | the `import` lines, with their line and package |
+| `--tokens` | the token stream: line, token category, lexeme |
+| `--ast` | the Abstract Syntax Tree, indented |
+| `--symtab` | the symbol table after semantic analysis |
+| `--tac` | Three Address Code (the default) |
+| `--opt` | optimized TAC (bonus) |
+| `--run` | runs the program with the TAC interpreter and prints its output (bonus) |
+| `--asm` | 32-bit x86 assembly, AT&T syntax (bonus) |
+| `--all` | every phase above |
+| `-o file` | writes the output to `file` instead of the screen |
+| `--strict` | accepts only the `class ... main` form; a bare list of statements is a syntax error |
+| `--manual` | accepts the manual's form without a class (the default; kept for older scripts) |
+| `--emit-files` | also writes `ast.txt`, `symbols.txt` and `output.tac` |
+
+**Exit status:** `0` when the program compiled, `1` when it has errors (or, with `--run`, stopped with a runtime error), `2` for a usage or file problem.
+
+## Output of each phase
+
+**Imports** (`--headers`)
+
+```text
+Import                        Line  Package               Role in this compiler
+java.util.Scanner             2     java.util             accepted (no effect)  - collections, Scanner, Random
+```
+
+**Symbol table** (`--symtab`). Each block, including a `for` header, has its own scope.
+
+```text
+Name            Type     Scope  Depth  Line   TAC name
+sum             int      0      0      4      sum
+i               int      1      1      5      i
+average         float    0      0      8      average
+big             boolean  0      0      9      big
+```
+
+**Three Address Code** for a program that reads two numbers and prints their product:
+
+```java
+import java.util.Scanner;
+
+class ReadInput {
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        int count = sc.nextInt();
+        float price = sc.nextFloat();
+        System.out.println(count * price);
+    }
+}
+```
+
+```text
+read count
+read price
+t1 = count * price
+print t1
+```
+
+With the input `3 2.5`, `--run` prints `7.5`. Like Java's `Scanner`, missing or wrong input stops the program with a runtime error, for example `Runtime error: no more input (the program wanted an int)`.
+
+## Error messages
+
+Errors are printed as `line N: <kind> error: <description>`. Error recovery reports every error in one run. Lexical and syntax errors stop compilation before semantic analysis; semantic errors stop it before TAC.
+
+```text
+line 6: lexical error: invalid identifier (cannot start with a digit) '2count'
+line 7: lexical error: invalid character '$'
+line 3: lexical error: unknown package 'com.example.Tools' (only java.* and javax.* standard imports are supported)
+
+line 5: syntax error: unexpected PRINTLN on line 6 (missing ';' at the end of line 5?)
+line 7: syntax error: unexpected ';'
+
+line 5: semantic error: redeclaration of 'x' (already declared at line 4 in this scope)
+line 6: semantic error: type mismatch: cannot initialize boolean variable 'flag' with a float value
+line 7: semantic error: undeclared variable 'y'
+line 11: semantic error: scope violation: 'inner' (declared at line 9) is not visible outside its block
+line 12: semantic error: invalid assignment: cannot assign a boolean value to int variable 'x'
+line 13: semantic error: invalid expression: logical operator '&&' needs boolean operands, got int and int
+line 4: semantic error: variable 'total' might not have been initialized
+line 6: semantic error: type mismatch: sc.nextFloat() reads a float, but 'a' is an int (use sc.nextInt())
 ```
 
 ## Directory contents
 
 ```text
 javacompiler/
-├── Makefile                     make, make test, make run, make clean
-├── README.md                    this file
+├── Makefile                       make, make test, make run, make clean
+├── README.md                      this file
 ├── docs/
-│   ├── language-grammar.md      formal CFG, precedence table, lexical rules
-│   └── project-report.md        project report
+│   ├── language-grammar.md        formal CFG, precedence, lexical rules, error recovery
+│   └── project-report.md          project report
 ├── src/
-│   ├── main.cpp                 command-line driver, runs the phases in order
-│   ├── lexer/lexer.l            Flex lexer: tokens, comments, lexical errors
-│   ├── parser/parser.y          Bison grammar, builds the AST, error recovery
-│   ├── ast/ast.{h,cpp}          AST node, construction and the --ast printer
+│   ├── main.cpp                   command-line driver: runs the phases in order
+│   ├── lexer/lexer.l              tokens, comments, import lines, lexical errors
+│   ├── imports/imports.{h,cpp}    the import table: standard packages, --headers listing
+│   ├── parser/parser.y            grammar, AST construction, error recovery
+│   ├── ast/ast.{h,cpp}            AST node, construction and the --ast printer
 │   ├── symbol_table/symbol_table.{h,cpp}   stack of scopes: type, line, scope, TAC name, initialized
-│   ├── semantic/semantic.{h,cpp}   scope, type and definite-initialization checks
-│   ├── codegen/tac.{h,cpp}      Three Address Code generation
-│   ├── backend/backend.{h,cpp}  back end: optimizer (--opt), interpreter (--run), x86 assembly (--asm)
-│   └── common/                  types.h, diagnostics.h (shared error counters)
+│   ├── semantic/semantic.{h,cpp}  scope, type, initialization and Scanner checks
+│   ├── codegen/tac.{h,cpp}        Three Address Code generation
+│   ├── backend/backend.{h,cpp}    bonus: optimizer, TAC interpreter, x86 assembly
+│   └── common/                    types.h, diagnostics.h (shared error counters)
 ├── examples/
-│   └── Example.java             sample program in Java style
-└── tests/
-    ├── run_tests.sh             runs every test and compares it with its .expected file
-    ├── valid/                   19 programs that compile (7 of them test --opt, --run or --asm)
-    ├── lexical/                 5 programs with lexical errors
-    ├── syntax/                  4 programs with syntax errors
-    └── semantic/                10 programs with semantic errors
+│   └── Example.java               sample program in Java style
+└── tests/                         see Tests below
 ```
-
-`make` writes everything it generates to `build/` (`parser.tab.cpp`, `parser.tab.hpp`, `lex.yy.cpp`, and `minijavac.exe`). That folder is not committed.
-
-## Requirements
-
-`g++` with C++17, `make`, `flex` and `bison` (Bison 2.4 or newer).
-
-## Build
-
-```sh
-make
-```
-
-## Run
-
-```sh
-./build/minijavac tests/valid/manual_sample.java        # Three Address Code (default)
-./build/minijavac tests/valid/manual_bare_sample.java   # the manual's sample, no class
-./build/minijavac --all examples/Example.java           # every phase
-./build/minijavac examples/Example.java -o out.tac      # write the output to a file
-make run                                                # --all on examples/Example.java
-```
-
-| Option | Output |
-|---|---|
-| `--headers` | the `import` lines (standard `java.*` / `javax.*` only), their line and package |
-| `--tokens` | token stream |
-| `--ast` | abstract syntax tree |
-| `--symtab` | symbol table |
-| `--tac` | Three Address Code (default) |
-| `--opt` | optimized Three Address Code (constant propagation and folding, unreachable code, dead temporaries) |
-| `--asm` | x86 assembly (32-bit, AT&T syntax; assemble with MinGW `gcc out.s -o out.exe`) |
-| `--run` | run the program with the TAC interpreter and print its output |
-| `--all` | all of the above |
-| `-o file` | write the output to a file |
-| `--strict` | accept only the `class Name { public static void main(...) { ... } }` form; a bare list of statements is a syntax error |
-| `--manual` | accept a program without a class, exactly as in the lab manual's sample (section 5.5); this is the default and the flag is kept for compatibility |
-| `--emit-files` | also write `ast.txt`, `symbols.txt` and `output.tac` (one file per phase) |
-
-Exit status: `0` compiled, `1` errors in the program (or, with `--run`, a runtime error such as division by zero), `2` usage or file problem. Errors are printed as `line N: <lexical|syntax|semantic> error: <description>`.
 
 ## Tests
 
 ```sh
-make test                        # run every test
-sh tests/run_tests.sh --update   # regenerate the .expected files after an intended change
+make test                          # build, then run all 38 tests
+sh tests/run_tests.sh --update     # rewrite the .expected files after an intended change
 ```
 
-Each `tests/<category>/<name>.java` has a matching `<name>.expected` file. Its first line is the exit status; the rest is the compiler's output. A test can pass compiler options on its first line (`// flags: --strict`).
+Each `tests/<category>/<name>.java` is paired with `<name>.expected`. Its first line is the exit status, and the rest is exactly what the compiler prints. A test can give compiler options on its first line (`// flags: --strict`) and the program's input on its second line (`// input: 41 1.25 true`).
 
-| Folder | Programs |
-|---|---|
-| `valid/` | asm_small, do_while, for_loop, imports, java_wrapper, manual_bare_sample, manual_sample, manual_tac_example, nested_scopes, opt_constant_folding, run_division_by_zero, run_manual_bare_sample, run_scanner, run_scanner_no_input, run_stress, scanner_tac, smoke, sum_three, switch_case |
-| `lexical/` | bad_character, bad_import, invalid_identifier, scanner_method, unterminated_comment |
-| `syntax/` | missing_class, missing_parenthesis, missing_semicolon, multiple_errors |
-| `semantic/` | break_outside_loop, invalid_assignment, invalid_expression, non_boolean_condition, redeclaration, scanner_errors, scope_violation, type_mismatch, undeclared, uninitialized |
+| Folder | Count | Programs |
+|---|---|---|
+| `valid/` | 19 | asm_small, do_while, for_loop, imports, java_wrapper, manual_bare_sample, manual_sample, manual_tac_example, nested_scopes, opt_constant_folding, run_division_by_zero, run_manual_bare_sample, run_scanner, run_scanner_no_input, run_stress, scanner_tac, smoke, sum_three, switch_case |
+| `lexical/` | 5 | bad_character, bad_import, invalid_identifier, scanner_method, unterminated_comment |
+| `syntax/` | 4 | missing_class, missing_parenthesis, missing_semicolon, multiple_errors |
+| `semantic/` | 10 | break_outside_loop, invalid_assignment, invalid_expression, non_boolean_condition, redeclaration, scanner_errors, scope_violation, type_mismatch, undeclared, uninitialized |
+
+Current result: **38 passed, 0 failed**.
