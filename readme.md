@@ -314,6 +314,7 @@ On [Render](https://render.com), **New → Blueprint** with this repository uses
 ```text
 Compiler_Construction/
 ├── readme.md                     this file
+├── docs/PROJECT_REPORT.md        the group project report (manual section 12)
 ├── Dockerfile                    builds the compilers and the web interface, runs every test suite
 ├── render.yaml                   deployment of the Dockerfile on Render
 │
@@ -387,7 +388,8 @@ Each compiler folder follows the layout suggested in section 8 of the manual: `s
 |---|---|
 | Per-compiler guides | [C](backend/c-compiler/README.md), [C++](backend/c++_compiler/README.md), [Java](backend/javacompiler/README.md) |
 | Formal grammars | [C](backend/c-compiler/docs/grammar.md), [C++](backend/c++_compiler/docs/grammar.md), [Java](backend/javacompiler/docs/language-grammar.md) |
-| Project reports | [C](backend/c-compiler/docs/PROJECT_REPORT.md), [Java](backend/javacompiler/docs/project-report.md) |
+| Project report (group, manual section 12) | [docs/PROJECT_REPORT.md](docs/PROJECT_REPORT.md) |
+| Per-compiler reports | [C](backend/c-compiler/docs/PROJECT_REPORT.md), [Java](backend/javacompiler/docs/project-report.md) |
 
 ## License
 
