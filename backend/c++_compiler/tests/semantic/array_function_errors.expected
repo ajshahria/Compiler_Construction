@@ -1,0 +1,20 @@
+=== Headers ===
+Header              Line  Category      Role in this compiler
+------------------------------------------------------------------------
+<iostream>          2     I/O           enables cout / endl  - std::cout / std::cin streams
+Semantic error [line 5]: too many values for array 'a' (size 3, 4 values)
+Semantic error [line 18]: function 'noValue' must return a value of type int
+Semantic error [line 22]: void function 'wrong' cannot return a value
+Semantic error [line 26]: array index of 'a' must be int, found float
+Semantic error [line 27]: array 'a' used without an index: write a[i]
+Semantic error [line 28]: invalid assignment: cannot assign to the whole array 'a'
+Semantic error [line 29]: 'n' is not an array and cannot be indexed
+Semantic error [line 30]: invalid assignment: cannot assign float to int variable 'n'
+Semantic error [line 31]: function 'twice' takes 1 argument(s) but 2 were given
+Semantic error [line 32]: argument 1 of 'twice' must be int, found bool
+Semantic error [line 33]: void function 'show' does not return a value
+Semantic error [line 34]: undeclared function 'missing'
+Semantic error [line 35]: 'n' is not a function and cannot be called
+Semantic error [line 36]: function 'twice' used without a call: write twice(...)
+Semantic error [line 37]: cin cannot read into array 'a': read one element, a[i]
+Compilation failed: 15 semantic error(s).

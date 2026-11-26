@@ -16,6 +16,11 @@ struct Symbol {
     Type type;
     int scopeId;         // unique id of the scope it belongs to (0 = global)
     int line;            // line declared
+    long length;         // arrays (bonus): number of elements; 0 for a variable
+    bool isFunction;     // functions (bonus): type is the return type
+    std::vector<Type> params;   // functions: parameter types
+    std::string function;       // the function (other than main) whose local this is, or ""
+    Symbol() : type(TY_INT), scopeId(0), line(0), length(0), isFunction(false) {}
 };
 
 class SymbolTable {
@@ -25,6 +30,9 @@ public:
     void exitScope();
     // Returns false (and the existing symbol in *existing) if already declared in the current scope.
     bool insert(const std::string& name, Type type, int line, Symbol** existing, Symbol** created);
+    // The same for an array, a function or a function's local: the extra fields are copied from 'extra'.
+    bool insert(const std::string& name, Type type, int line, Symbol** existing, Symbol** created,
+                const Symbol& extra);
     Symbol* lookup(const std::string& name);          // searches all open scopes, innermost first
     // A symbol that was declared in a scope that is now closed (for "scope violation" messages).
     Symbol* findClosed(const std::string& name);

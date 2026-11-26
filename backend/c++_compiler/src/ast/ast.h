@@ -11,7 +11,8 @@
 enum class NodeKind {
     Program, Block, DeclGroup, VarDecl, Assign, If, While, DoWhile, Break, Continue,
     Return, Switch, Print, Cout, Cin,
-    Binary, Unary, Ternary, IntLit, FloatLit, BoolLit, Ident
+    Binary, Unary, Ternary, IntLit, FloatLit, BoolLit, Ident,
+    Index, Call, Function      // bonus: a[i], f(x, y), int f(int x) { ... }
 };
 
 struct Node {
@@ -31,21 +32,27 @@ struct BlockNode : Node {
     void print(std::ostream& os, int indent) const;
 };
 
+// A variable, or (bonus) an array: 'int a[5];' 'int b[] = {1, 2};' (length > 0,
+// initial values in initList; length -1 marks a bad size, reported by semantic analysis).
 struct VarDeclNode : Node {
     Type declType;
     std::string name;
     std::string uname;  // unique TAC name (set by semantic analysis)
     Node* init;         // may be null
+    long length;        // arrays: number of elements; 0 for a variable
+    std::vector<Node*> initList;
     VarDeclNode(Type t, const std::string& n, Node* i, int l)
-        : Node(NodeKind::VarDecl, l), declType(t), name(n), init(i) {}
+        : Node(NodeKind::VarDecl, l), declType(t), name(n), init(i), length(0) {}
     void print(std::ostream& os, int indent) const;
 };
 
+// x = e, or (bonus) a[i] = e when index is set.
 struct AssignNode : Node {
     std::string name, uname;
     Node* value;
-    AssignNode(const std::string& n, Node* v, int l)
-        : Node(NodeKind::Assign, l), name(n), value(v) {}
+    Node* index;        // may be null
+    AssignNode(const std::string& n, Node* v, int l, Node* idx = NULL)
+        : Node(NodeKind::Assign, l), name(n), value(v), index(idx) {}
     void print(std::ostream& os, int indent) const;
 };
 
@@ -164,11 +171,47 @@ struct IdentNode : Node {
     void print(std::ostream& os, int indent) const;
 };
 
-// 'cin >> a >> b;'  Needs #include <iostream>.
+// a[i]  (bonus)
+struct IndexNode : Node {
+    std::string name, uname;
+    Node* index;
+    IndexNode(const std::string& n, Node* i, int l) : Node(NodeKind::Index, l), name(n), index(i) {}
+    void print(std::ostream& os, int indent) const;
+};
+
+// f(a, b)  (bonus) - an expression, or a statement on its own: 'f(a);'
+struct CallNode : Node {
+    std::string name;
+    std::vector<Node*> args;
+    CallNode(const std::string& n, int l) : Node(NodeKind::Call, l), name(n) {}
+    void print(std::ostream& os, int indent) const;
+};
+
+struct Param {
+    Type type;
+    std::string name, uname;
+    int line;
+};
+
+// int f(int a, float b) { ... }  (bonus)
+struct FunctionNode : Node {
+    Type retType;       // TY_VOID for a void function
+    std::string name;
+    std::vector<Param> params;
+    BlockNode* body;
+    FunctionNode(Type t, const std::string& n, BlockNode* b, int l)
+        : Node(NodeKind::Function, l), retType(t), name(n), body(b) {}
+    void print(std::ostream& os, int indent) const;
+};
+
+// 'cin >> a >> b[i];'  Needs #include <iostream>. Each target is an Ident or (bonus) an Index.
 struct CinNode : Node {
-    std::vector<IdentNode*> vars;
+    std::vector<Node*> vars;
     CinNode(int l) : Node(NodeKind::Cin, l) {}
     void print(std::ostream& os, int indent) const;
 };
+
+// The AST as a Graphviz digraph (the --dot option, bonus).
+void printDot(const Node* root, std::ostream& os);
 
 #endif

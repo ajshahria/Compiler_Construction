@@ -12,6 +12,10 @@
  * Shorthand is rewritten into core nodes right here in the parser:
  *   x += e  ->  x = x + e      x++ / ++x  ->  x = x + 1      for(i;c;s) b  ->  { i; while(c) b step s }
  *   int a, b = 2;  ->  a DeclGroup of single declarations      double/long/short  ->  float/int
+ *   a[i] += e  ->  a[i] = a[i] + e
+ *
+ * Bonus: one-dimensional arrays (int a[5]; int b[] = {1, 2}; a[i]) and functions
+ * (int f(int x) { ... }, void g() { ... }, calls f(1) as expressions or statements).
  */
 %{
 #include <cstdio>
@@ -46,6 +50,21 @@ static Node* compound(const char* name, const char* op, Node* rhs, int line) {
     return new AssignNode(name, new BinaryNode(op, new IdentNode(name, line), rhs, line), line);
 }
 
+/* build  a[i] = a[i] <op> rhs  (a[i] += e, a[i]++ ...) */
+static Node* compoundElement(const char* name, Node* index, const char* op, Node* rhs, int line) {
+    return new AssignNode(name, new BinaryNode(op, new IndexNode(name, index, line), rhs, line), line, index);
+}
+
+/* an array declarator: name[length] = { values } (length 0: taken from the values) */
+static Node* arrayDecl(char* name, long length, CallNode* values, int line) {
+    VarDeclNode* d = new VarDeclNode(TY_ERROR, name, NULL, line);
+    if (values) { d->initList = values->args; delete values; }
+    d->length = length > 0 ? length : (long)d->initList.size();
+    if (d->length <= 0) d->length = -1;          /* reported by the semantic analyzer */
+    free(name);
+    return d;
+}
+
 /* give every declarator of 'int a, b = 2;' its type; a single declarator stays a plain VarDecl */
 static Node* finishDecl(Type t, BlockNode* group) {
     for (size_t i = 0; i < group->stmts.size(); i++)
@@ -71,6 +90,8 @@ static Node* finishDecl(Type t, BlockNode* group) {
     CoutNode*   coutn;
     CinNode*    cinn;
     SwitchNode* swn;
+    CallNode*   args;       /* a list of expressions (call arguments, array values) */
+    FunctionNode* func;     /* a list of parameters */
 }
 
 %token KW_INT KW_FLOAT KW_BOOL KW_IF KW_ELSE KW_WHILE KW_PRINT KW_TRUE KW_FALSE
@@ -91,6 +112,9 @@ static Node* finishDecl(Type t, BlockNode* group) {
 %type <coutn> cout_stmt cout_list
 %type <cinn>  cin_stmt cin_list
 %type <swn>   switch_stmt case_list
+%type <node>  function_def call_stmt
+%type <args>  call_args arg_list
+%type <func>  params param_list
 
 %nonassoc LOWER_THAN_ELSE
 %nonassoc KW_ELSE
@@ -124,6 +148,8 @@ stmt
     | print_stmt
     | return_stmt
     | main_def
+    | function_def
+    | call_stmt
     | block
     | cout_stmt                 { $$ = $1; }
     | cin_stmt                  { $$ = $1; }
@@ -149,6 +175,43 @@ main_def
           $$ = registerMain($4, @1.first_line, false); }
     ;
 
+/* int f(int a, float b) { ... }   void g() { ... }  (bonus) */
+function_def
+    : type IDENTIFIER '(' params ')' block
+        { $4->retType = $1; $4->name = $2; $4->body = static_cast<BlockNode*>($6); $4->line = @2.first_line; $$ = $4; free($2); }
+    | KW_VOID IDENTIFIER '(' params ')' block
+        { $4->retType = TY_VOID; $4->name = $2; $4->body = static_cast<BlockNode*>($6); $4->line = @2.first_line; $$ = $4; free($2); }
+    ;
+
+params
+    : /* empty */               { $$ = new FunctionNode(TY_VOID, "", NULL, yylineno); }
+    | KW_VOID                   { $$ = new FunctionNode(TY_VOID, "", NULL, yylineno); }
+    | param_list                { $$ = $1; }
+    ;
+
+param_list
+    : type IDENTIFIER
+        { $$ = new FunctionNode(TY_VOID, "", NULL, @2.first_line);
+          Param p; p.type = $1; p.name = $2; p.line = @2.first_line; $$->params.push_back(p); free($2); }
+    | param_list ',' type IDENTIFIER
+        { Param p; p.type = $3; p.name = $4; p.line = @4.first_line; $1->params.push_back(p); free($4); $$ = $1; }
+    ;
+
+/* f(a, b);  a call whose value is not used (bonus) */
+call_stmt
+    : IDENTIFIER '(' call_args ')' ';'   { $3->name = $1; $3->line = @1.first_line; $$ = $3; free($1); }
+    ;
+
+call_args
+    : /* empty */               { $$ = new CallNode("", yylineno); }
+    | arg_list                  { $$ = $1; }
+    ;
+
+arg_list
+    : expr                      { $$ = new CallNode("", @1.first_line); $$->args.push_back($1); }
+    | arg_list ',' expr         { $1->args.push_back($3); $$ = $1; }
+    ;
+
 type
     : KW_INT                    { $$ = TY_INT; }
     | KW_FLOAT                  { $$ = TY_FLOAT; }
@@ -172,6 +235,9 @@ declarators
 declarator
     : IDENTIFIER                { $$ = new VarDeclNode(TY_ERROR, $1, NULL, @1.first_line); free($1); }
     | IDENTIFIER '=' expr       { $$ = new VarDeclNode(TY_ERROR, $1, $3, @1.first_line); free($1); }
+    | IDENTIFIER '[' INT_LIT ']'                        { $$ = arrayDecl($1, $3 > 0 ? $3 : -1, NULL, @1.first_line); }
+    | IDENTIFIER '[' INT_LIT ']' '=' '{' arg_list '}'   { $$ = arrayDecl($1, $3 > 0 ? $3 : -1, $7, @1.first_line); }
+    | IDENTIFIER '[' ']' '=' '{' arg_list '}'           { $$ = arrayDecl($1, 0, $6, @1.first_line); }
     ;
 
 assign_stmt
@@ -189,6 +255,14 @@ simple_assign
     | IDENTIFIER DEC            { $$ = compound($1, "-", new IntLitNode(1, @1.first_line), @1.first_line); free($1); }
     | INC IDENTIFIER            { $$ = compound($2, "+", new IntLitNode(1, @1.first_line), @1.first_line); free($2); }
     | DEC IDENTIFIER            { $$ = compound($2, "-", new IntLitNode(1, @1.first_line), @1.first_line); free($2); }
+    /* array elements (bonus) */
+    | IDENTIFIER '[' expr ']' '=' expr   { $$ = new AssignNode($1, $6, @1.first_line, $3); free($1); }
+    | IDENTIFIER '[' expr ']' ADDEQ expr { $$ = compoundElement($1, $3, "+", $6, @1.first_line); free($1); }
+    | IDENTIFIER '[' expr ']' SUBEQ expr { $$ = compoundElement($1, $3, "-", $6, @1.first_line); free($1); }
+    | IDENTIFIER '[' expr ']' MULEQ expr { $$ = compoundElement($1, $3, "*", $6, @1.first_line); free($1); }
+    | IDENTIFIER '[' expr ']' DIVEQ expr { $$ = compoundElement($1, $3, "/", $6, @1.first_line); free($1); }
+    | IDENTIFIER '[' expr ']' INC        { $$ = compoundElement($1, $3, "+", new IntLitNode(1, @1.first_line), @1.first_line); free($1); }
+    | IDENTIFIER '[' expr ']' DEC        { $$ = compoundElement($1, $3, "-", new IntLitNode(1, @1.first_line), @1.first_line); free($1); }
     ;
 
 if_stmt
@@ -305,7 +379,10 @@ cin_stmt
 
 cin_list
     : IDENTIFIER                { $$ = new CinNode(@1.first_line); $$->vars.push_back(new IdentNode($1, @1.first_line)); free($1); }
+    | IDENTIFIER '[' expr ']'   { $$ = new CinNode(@1.first_line); $$->vars.push_back(new IndexNode($1, $3, @1.first_line)); free($1); }
     | cin_list SHR IDENTIFIER   { $1->vars.push_back(new IdentNode($3, @3.first_line)); free($3); $$ = $1; }
+    | cin_list SHR IDENTIFIER '[' expr ']'
+                                { $1->vars.push_back(new IndexNode($3, $5, @3.first_line)); free($3); $$ = $1; }
     ;
 
 expr
@@ -331,6 +408,9 @@ expr
     | KW_TRUE                   { $$ = new BoolLitNode(true, @1.first_line); }
     | KW_FALSE                  { $$ = new BoolLitNode(false, @1.first_line); }
     | IDENTIFIER                { $$ = new IdentNode($1, @1.first_line); free($1); }
+    | IDENTIFIER '[' expr ']'   { $$ = new IndexNode($1, $3, @1.first_line); free($1); }
+    | IDENTIFIER '(' call_args ')'
+                                { $3->name = $1; $3->line = @1.first_line; $$ = $3; free($1); }
     ;
 
 %%

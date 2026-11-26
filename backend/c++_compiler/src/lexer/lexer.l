@@ -150,7 +150,7 @@ LETTER  [A-Za-z_]
 "&&"    { TOK(AND); }
 "||"    { TOK(OR); }
 
-[+\-*/%<>=!(){};:,?]  { return tok(yytext[0], yytext); }
+[+\-*/%<>=!(){};:,?\[\]]  { return tok(yytext[0], yytext); }   /* [ ] arrays (bonus) */
 
 "//".*              { /* single-line comment: discarded */ }
 "/*"                { commentStart = yylineno; BEGIN(BLOCKCOMMENT); }

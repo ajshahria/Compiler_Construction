@@ -1,0 +1,334 @@
+=== Headers ===
+Header              Line  Category      Role in this compiler
+------------------------------------------------------------------------
+<iostream>          4     I/O           enables cout / endl  - std::cout / std::cin streams
+=== Three Address Code ===
+    data[0] = 5
+    data[1] = 2
+    data[2] = 9
+    data[3] = 1
+    data[4] = 7
+    data[5] = 3
+    outs "5! = "
+    param 5
+    t1 = call factorial 1
+    out t1
+    outnl
+    outs "fib(10) = "
+    param 10
+    t2 = call fib 1
+    out t2
+    outnl
+    outs "average = "
+    param 6
+    t3 = call average 1
+    out t3
+    outnl
+    param 6
+    call sortData 1
+    i_2 = 0
+L1:
+    t4 = i_2 < 6
+    ifFalse t4 goto L2
+    t5 = data[i_2]
+    out t5
+    outs " "
+    t6 = i_2 + 1
+    i_2 = t6
+    goto L1
+L2:
+    outnl
+    i_3 = 0
+L4:
+    t7 = i_3 < 5
+    ifFalse t7 goto L5
+    t8 = i_3 * i_3
+    squares[i_3] = t8
+    t9 = i_3 + 1
+    i_3 = t9
+    goto L4
+L5:
+    t10 = squares[4]
+    t11 = t10 + 1
+    squares[4] = t11
+    t12 = squares[1]
+    t13 = t12 + 10
+    squares[1] = t13
+    t14 = squares[4]
+    out t14
+    outs " "
+    t15 = squares[1]
+    out t15
+    outnl
+    read squares[0]
+    read input[1]
+    t16 = squares[0]
+    t17 = t16 + 1
+    out t17
+    outs " "
+    t18 = input[1]
+    param t18
+    param 2
+    t19 = call scale 2
+    out t19
+    outs " "
+    param 3.0
+    param 2
+    t20 = call scale 2
+    out t20
+    outnl
+    goto L7
+L7:
+func factorial:
+    formal n
+    t21 = n <= 1
+    ifFalse t21 goto L8
+    return 1
+L8:
+    t22 = n - 1
+    param t22
+    t23 = call factorial 1
+    t24 = n * t23
+    return t24
+    endfunc
+func fib:
+    formal n_1
+    t25 = n_1 < 2
+    ifFalse t25 goto L9
+    return n_1
+L9:
+    t26 = n_1 - 1
+    param t26
+    t27 = call fib 1
+    t28 = n_1 - 2
+    param t28
+    t29 = call fib 1
+    t30 = t27 + t29
+    return t30
+    endfunc
+func average:
+    formal count
+    total = 0
+    i = 0
+L10:
+    t31 = i < count
+    ifFalse t31 goto L11
+    t32 = data[i]
+    t33 = total + t32
+    total = t33
+    t34 = i + 1
+    i = t34
+    goto L10
+L11:
+    t35 = (float) total
+    t36 = t35 / 1.0
+    t37 = (float) count
+    t38 = t36 / t37
+    return t38
+    endfunc
+func sortData:
+    formal count_1
+    i_1 = 0
+L13:
+    t39 = count_1 - 1
+    t40 = i_1 < t39
+    ifFalse t40 goto L14
+    j = 0
+L16:
+    t41 = count_1 - 1
+    t42 = t41 - i_1
+    t43 = j < t42
+    ifFalse t43 goto L17
+    t44 = data[j]
+    t45 = j + 1
+    t46 = data[t45]
+    t47 = t44 > t46
+    ifFalse t47 goto L19
+    t48 = data[j]
+    swap = t48
+    t49 = j + 1
+    t50 = data[t49]
+    data[j] = t50
+    t51 = j + 1
+    data[t51] = swap
+L19:
+    t52 = j + 1
+    j = t52
+    goto L16
+L17:
+    t53 = i_1 + 1
+    i_1 = t53
+    goto L13
+L14:
+    endfunc
+func scale:
+    formal x
+    formal times
+    t54 = (float) times
+    t55 = x * t54
+    return t55
+    endfunc
+=== Optimized TAC ===
+    data[0] = 5
+    data[1] = 2
+    data[2] = 9
+    data[3] = 1
+    data[4] = 7
+    data[5] = 3
+    outs "5! = "
+    param 5
+    t1 = call factorial 1
+    out t1
+    outnl
+    outs "fib(10) = "
+    param 10
+    t2 = call fib 1
+    out t2
+    outnl
+    outs "average = "
+    param 6
+    t3 = call average 1
+    out t3
+    outnl
+    param 6
+    call sortData 1
+    i_2 = 0
+L1:
+    t4 = i_2 < 6
+    ifFalse t4 goto L2
+    t5 = data[i_2]
+    out t5
+    outs " "
+    i_2 = i_2 + 1
+    goto L1
+L2:
+    outnl
+    i_3 = 0
+L4:
+    t7 = i_3 < 5
+    ifFalse t7 goto L5
+    t8 = i_3 * i_3
+    squares[i_3] = t8
+    i_3 = i_3 + 1
+    goto L4
+L5:
+    t10 = squares[4]
+    t11 = t10 + 1
+    squares[4] = t11
+    t12 = squares[1]
+    t13 = t12 + 10
+    squares[1] = t13
+    t14 = squares[4]
+    out t14
+    outs " "
+    t15 = squares[1]
+    out t15
+    outnl
+    read squares[0]
+    read input[1]
+    t16 = squares[0]
+    t17 = t16 + 1
+    out t17
+    outs " "
+    t18 = input[1]
+    param t18
+    param 2
+    t19 = call scale 2
+    out t19
+    outs " "
+    param 3.0
+    param 2
+    t20 = call scale 2
+    out t20
+    outnl
+func factorial:
+    formal n
+    t21 = n <= 1
+    ifFalse t21 goto L8
+    return 1
+L8:
+    t22 = n - 1
+    param t22
+    t23 = call factorial 1
+    t24 = n * t23
+    return t24
+    endfunc
+func fib:
+    formal n_1
+    t25 = n_1 < 2
+    ifFalse t25 goto L9
+    return n_1
+L9:
+    t26 = n_1 - 1
+    param t26
+    t27 = call fib 1
+    t28 = n_1 - 2
+    param t28
+    t29 = call fib 1
+    t30 = t27 + t29
+    return t30
+    endfunc
+func average:
+    formal count
+    total = 0
+    i = 0
+L10:
+    t31 = i < count
+    ifFalse t31 goto L11
+    t32 = data[i]
+    total = total + t32
+    i = i + 1
+    goto L10
+L11:
+    t35 = (float) total
+    t36 = t35 / 1.0
+    t37 = (float) count
+    t38 = t36 / t37
+    return t38
+    endfunc
+func sortData:
+    formal count_1
+    i_1 = 0
+L13:
+    t39 = count_1 - 1
+    t40 = i_1 < t39
+    ifFalse t40 goto L14
+    j = 0
+L16:
+    t41 = count_1 - 1
+    t42 = t41 - i_1
+    t43 = j < t42
+    ifFalse t43 goto L17
+    t44 = data[j]
+    t45 = j + 1
+    t46 = data[t45]
+    t47 = t44 > t46
+    ifFalse t47 goto L19
+    swap = data[j]
+    t49 = j + 1
+    t50 = data[t49]
+    data[j] = t50
+    t51 = j + 1
+    data[t51] = swap
+L19:
+    j = j + 1
+    goto L16
+L17:
+    i_1 = i_1 + 1
+    goto L13
+L14:
+    endfunc
+func scale:
+    formal x
+    formal times
+    t54 = (float) times
+    t55 = x * t54
+    return t55
+    endfunc
+=== Program Output ===
+5! = 120
+fib(10) = 55
+average = 4.5
+1 2 3 5 7 9 
+17 11
+5 5 6

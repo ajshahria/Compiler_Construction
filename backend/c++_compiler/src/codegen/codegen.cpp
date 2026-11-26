@@ -11,12 +11,18 @@ class CodeGen {
 public:
     AsmWriter w;
     std::map<std::string, Type> cells;        // every variable / temporary and its type
+    std::map<std::string, long> arrayLength;  // arrays (bonus): number of elements
+    std::map<std::string, Type> functionType; // functions (bonus): return type
+    std::map<std::string, std::vector<std::string> > locals;   // function -> its cells (saved on entry)
+    std::map<std::string, int> formalCount;   // function -> number of parameters
+    std::string function;                     // the function being generated ("" in main)
+    int formalIndex;
     std::vector<std::pair<std::string, double> > floatConsts;   // pool entries .LFn
     std::vector<std::pair<std::string, long> > intConsts;       // pool entries .LIn (for fild)
     std::vector<std::pair<std::string, std::string> > strings;   // pool entries .LSn
     int printLabels;
 
-    CodeGen() : printLabels(0) {}
+    CodeGen() : formalIndex(0), printLabels(0) {}
 
     // Label of a text constant in the data section (added to the pool on first use).
     std::string strLabel(const std::string& text) {
@@ -45,11 +51,159 @@ public:
 
     static std::string cell(const std::string& n) { return "_v_" + n; }
 
+    void addLocal(const std::string& f, const std::string& cellName) {
+        std::vector<std::string>& l = locals[f];
+        for (size_t i = 0; i < l.size(); i++) if (l[i] == cellName) return;
+        l.push_back(cellName);
+    }
+
     void collect(const TacProgram& p) {
-        for (size_t i = 0; i < p.vars.size(); i++) cells[p.vars[i].uname] = p.vars[i].type;
+        for (size_t i = 0; i < p.vars.size(); i++) {
+            const Symbol& s = p.vars[i];
+            if (s.isFunction) { functionType[s.name] = s.type; continue; }
+            cells[s.uname] = s.type;
+            if (s.length > 0) arrayLength[s.uname] = s.length;
+            if (!s.function.empty()) addLocal(s.function, s.uname);
+        }
+        std::string inside;
         for (size_t i = 0; i < p.code.size(); i++) {
             const Instr& in = p.code[i];
-            if (in.result.isName()) cells[in.result.name] = in.result.ty;
+            if (in.op == Op::Func) inside = in.label;
+            if (in.op == Op::EndFunc) inside.clear();
+            if (in.op == Op::Formal) formalCount[inside]++;
+            if (in.op == Op::Store || in.op == Op::ReadElem) continue;   // the result is the array
+            if (in.result.isName()) {
+                cells[in.result.name] = in.result.ty;
+                if (!inside.empty() && in.result.kind == Operand::Temp) addLocal(inside, in.result.name);
+            }
+        }
+    }
+
+    // ----- arrays and functions (bonus) -----
+
+    // Element %ecx of an array.
+    static std::string element(const std::string& array) { return cell(array) + "(,%ecx,4)"; }
+
+    // Pushes a 32-bit value: an int/bool, a float cell's bits, or a float constant.
+    void pushValue(const Operand& o) {
+        if (o.kind == Operand::FloatC) {
+            w.instr("flds", fmem(o));
+            w.instr("subl", "$4", "%esp");
+            w.instr("fstps", "(%esp)");
+        } else {
+            w.instr("pushl", imem(o));
+        }
+    }
+
+    // func f: the function saves its own locals (a call of f may still be running:
+    // recursion), copying an array onto the stack with rep movsl.
+    void functionEntry(const std::string& name) {
+        function = name;
+        formalIndex = 0;
+        w.directive("");
+        w.label("_f_" + name);
+        w.instr("pushl", "%ebp");
+        w.instr("movl", "%esp", "%ebp");
+        w.instr("pushl", "%esi");
+        w.instr("pushl", "%edi");
+        const std::vector<std::string>& l = locals[name];
+        for (size_t i = 0; i < l.size(); i++) {
+            if (!arrayLength.count(l[i])) { w.instr("pushl", cell(l[i])); continue; }
+            std::ostringstream bytes, count;
+            bytes << "$" << 4 * arrayLength[l[i]];
+            count << "$" << arrayLength[l[i]];
+            w.instr("subl", bytes.str(), "%esp");
+            w.instr("movl", "$" + cell(l[i]), "%esi");
+            w.instr("movl", "%esp", "%edi");
+            w.instr("movl", count.str(), "%ecx");
+            w.instr("cld");
+            w.instr("rep movsl");
+        }
+    }
+
+    // endfunc: restore the locals in the opposite order (%eax keeps the result).
+    void functionExit() {
+        w.label(".Lret_" + function);
+        const std::vector<std::string>& l = locals[function];
+        for (size_t i = l.size(); i-- > 0; ) {
+            if (!arrayLength.count(l[i])) { w.instr("popl", cell(l[i])); continue; }
+            std::ostringstream bytes, count;
+            bytes << "$" << 4 * arrayLength[l[i]];
+            count << "$" << arrayLength[l[i]];
+            w.instr("movl", "%esp", "%esi");
+            w.instr("movl", "$" + cell(l[i]), "%edi");
+            w.instr("movl", count.str(), "%ecx");
+            w.instr("cld");
+            w.instr("rep movsl");
+            w.instr("addl", bytes.str(), "%esp");
+        }
+        w.instr("popl", "%edi");
+        w.instr("popl", "%esi");
+        w.instr("popl", "%ebp");
+        w.instr("ret");
+        function.clear();
+    }
+
+    // Instructions of arrays and functions; false for any other instruction.
+    bool emitBonus(const Instr& in) {
+        switch (in.op) {
+            case Op::Load:
+                loadInt(in.b, "%ecx");
+                w.instr("movl", element(in.a.name), "%eax");
+                w.instr("movl", "%eax", cell(in.result.name));
+                return true;
+            case Op::Store:
+                loadInt(in.a, "%ecx");
+                if (in.result.ty == TY_FLOAT) {
+                    w.instr("flds", fmem(in.b));
+                    w.instr("fstps", element(in.result.name));
+                } else {
+                    loadInt(in.b, "%eax");
+                    w.instr("movl", "%eax", element(in.result.name));
+                }
+                return true;
+            case Op::ReadElem:   // cin >> a[i]  ->  scanf("%d" or "%f", &a[i])
+                loadInt(in.a, "%ecx");
+                w.instr("leal", element(in.result.name), "%eax");
+                w.instr("pushl", "%eax");
+                w.instr("pushl", in.ty == TY_FLOAT ? "$.Lscan_float" : "$.Lscan_int");
+                w.instr("call", "_scanf");
+                w.instr("addl", "$8", "%esp");
+                return true;
+            case Op::Func:    functionEntry(in.label); return true;
+            case Op::EndFunc: functionExit(); return true;
+            case Op::Formal: {   // argument k of n is at 8 + 4*(n-1-k)(%ebp)
+                std::ostringstream at;
+                at << 8 + 4 * (formalCount[function] - 1 - formalIndex++) << "(%ebp)";
+                w.instr("movl", at.str(), "%eax");
+                w.instr("movl", "%eax", cell(in.result.name));
+                return true;
+            }
+            case Op::Return:
+                if (in.a.kind == Operand::FloatC) {
+                    w.instr("flds", fmem(in.a));
+                    w.instr("subl", "$4", "%esp");
+                    w.instr("fstps", "(%esp)");
+                    w.instr("popl", "%eax");
+                } else if (in.a.kind != Operand::None) {
+                    loadInt(in.a, "%eax");
+                }
+                w.instr("jmp", ".Lret_" + function);
+                return true;
+            case Op::Param:
+                pushValue(in.a);
+                return true;
+            case Op::Call: {
+                w.instr("call", "_f_" + in.label);
+                if (in.argc > 0) {
+                    std::ostringstream n; n << "$" << 4 * in.argc;
+                    w.instr("addl", n.str(), "%esp");
+                }
+                if (in.result.kind != Operand::None) w.instr("movl", "%eax", cell(in.result.name));
+                return true;
+            }
+            default:
+                return false;
         }
     }
 
@@ -152,6 +306,7 @@ public:
 
     void emitInstr(const Instr& in) {
         w.comment(instrStr(in));
+        if (emitBonus(in)) return;
         switch (in.op) {
             case Op::Label: w.label("." + in.label); return;
             case Op::Goto:  w.instr("jmp", "." + in.label); return;
@@ -234,11 +389,21 @@ public:
         w.instr("movl", "%esp", "%ebp");
         w.instr("andl", "$-16", "%esp");
         w.instr("call", "___main");   // MinGW runtime initialisation
-        for (size_t i = 0; i < p.code.size(); i++) emitInstr(p.code[i]);
+        bool inside = false;          // main: everything outside the func ... endfunc blocks
+        for (size_t i = 0; i < p.code.size(); i++) {
+            if (p.code[i].op == Op::Func) inside = true;
+            if (!inside) emitInstr(p.code[i]);
+            if (p.code[i].op == Op::EndFunc) inside = false;
+        }
         w.instr("xorl", "%eax", "%eax");
         w.instr("movl", "%ebp", "%esp");
         w.instr("popl", "%ebp");
         w.instr("ret");
+        for (size_t i = 0; i < p.code.size(); i++) {   // then every function
+            if (p.code[i].op == Op::Func) inside = true;
+            if (inside) emitInstr(p.code[i]);
+            if (p.code[i].op == Op::EndFunc) inside = false;
+        }
         std::string text = w.str();
 
         AsmWriter out;
@@ -269,7 +434,12 @@ public:
         }
         for (std::map<std::string, Type>::iterator it = cells.begin(); it != cells.end(); ++it) {
             out.label(cell(it->first));
-            out.directive(it->second == TY_FLOAT ? ".float 0.0" : ".long 0");
+            if (arrayLength.count(it->first)) {          // an array: one 4-byte cell per element
+                std::ostringstream fill; fill << ".fill " << arrayLength[it->first] << ", 4, 0";
+                out.directive(fill.str());
+            } else {
+                out.directive(it->second == TY_FLOAT ? ".float 0.0" : ".long 0");
+            }
         }
         out.section(".text");
         out.global("_main");
