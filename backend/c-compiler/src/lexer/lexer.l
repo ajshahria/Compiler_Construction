@@ -214,6 +214,13 @@ ID      {LETTER}({LETTER}|{DIGIT})*
 "if"                    { return IF; }
 "else"                  { return ELSE; }
 "while"                 { return WHILE; }
+"for"                   { return FOR; }         /* loops and switch (bonus) */
+"do"                    { return DO; }
+"switch"                { return SWITCH; }
+"case"                  { return CASE; }
+"default"               { return DEFAULT; }
+"break"                 { return BREAK; }
+"continue"              { return CONTINUE; }
 "print"                 { return PRINT; }
 "true"                  { return TRUE; }
 "false"                 { return FALSE; }
@@ -225,6 +232,13 @@ ID      {LETTER}({LETTER}|{DIGIT})*
 ">="                    { return GE; }
 "&&"                    { return AND; }
 "||"                    { return OR; }
+"++"                    { return INC; }         /* increment/decrement (bonus) */
+"--"                    { return DEC; }
+"+="                    { return ADD_ASSIGN; }  /* compound assignment (bonus) */
+"-="                    { return SUB_ASSIGN; }
+"*="                    { return MUL_ASSIGN; }
+"/="                    { return DIV_ASSIGN; }
+"%="                    { return MOD_ASSIGN; }
 
  /* ----- literals and identifiers ----- */
 {DIGIT}+"."{DIGIT}+     { yylval.real = strtod(yytext, NULL); return FLOAT_LITERAL; }
@@ -239,7 +253,8 @@ ID      {LETTER}({LETTER}|{DIGIT})*
 {ID}                    { yylval.text = copy_text(yytext); return IDENT; }
 
  /* ----- single-character operators and delimiters ----- */
-[-+*/%<>=!(){};,&]      { return yytext[0]; }   /* '&' only in scanf(..., &x) */
+[-+*/%<>=!(){};,&\[\]:] { return yytext[0]; }   /* '&' only in scanf(..., &x);
+                                                     [ ] arrays, : case labels */
 
  /* ----- anything else is an invalid token ----- */
 .                       { lexical_error("invalid character", yytext); }

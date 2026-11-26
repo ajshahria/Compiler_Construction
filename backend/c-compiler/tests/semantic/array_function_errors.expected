@@ -1,0 +1,16 @@
+exit 1
+line 2: semantic error: too many values in the initializer of array 'a' (size 3, 4 values)
+line 4: semantic error: array 'zero' must have a positive size
+line 16: semantic error: function 'no_value' must return an int value
+line 20: semantic error: type mismatch: index of array 'a' must be an int, got float
+line 21: semantic error: invalid expression: array 'a' used without an index (write a[i])
+line 22: semantic error: invalid assignment: cannot assign to the whole array 'a' (assign a[i])
+line 23: semantic error: invalid assignment: 'n' is not an array and cannot be indexed
+line 24: semantic error: invalid assignment: cannot assign a float value to int variable 'n'
+line 25: semantic error: function 'twice' takes 1 argument(s) but 2 were given
+line 26: semantic error: type mismatch: argument 1 of 'twice' must be an int, got a bool value
+line 27: semantic error: invalid expression: void function 'show' does not return a value
+line 28: semantic error: undeclared function 'missing'
+line 29: semantic error: invalid expression: 'n' is not a function and cannot be called
+line 30: semantic error: invalid expression: function 'twice' used without a call (write twice(...))
+Compilation failed: 14 semantic error(s).

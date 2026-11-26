@@ -1,0 +1,73 @@
+=== Headers ===
+Header              Line  Category      Role in this compiler
+------------------------------------------------------------------------
+<iostream>          3     I/O           enables cout / endl  - std::cout / std::cin streams
+digraph AST {
+    node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=11];
+    edge [arrowsize=0.7];
+    n0 [label="Program", fillcolor="#d9d2e9"];
+    n1 [label="Function int twice(int x) (line 5)", fillcolor="#d9d2e9"];
+    n0 -> n1;
+    n2 [label="Block", fillcolor="#f3f3f3"];
+    n1 -> n2;
+    n3 [label="Return (line 6)", fillcolor="#fce5cd"];
+    n2 -> n3;
+    n4 [label="BinaryOp '*'", fillcolor="#fff2cc"];
+    n3 -> n4;
+    n5 [label="Ident x", fillcolor="#ffffff"];
+    n4 -> n5;
+    n6 [label="IntLit 2", fillcolor="#ffffff"];
+    n4 -> n6;
+    n7 [label="Block", fillcolor="#f3f3f3"];
+    n0 -> n7;
+    n8 [label="ArrayDecl int v[2] (line 9)", fillcolor="#cfe2f3"];
+    n7 -> n8;
+    n9 [label="IntLit 3", fillcolor="#ffffff"];
+    n8 -> n9;
+    n10 [label="IntLit 4", fillcolor="#ffffff"];
+    n8 -> n10;
+    n11 [label="Cout (line 10)", fillcolor="#ead1dc"];
+    n7 -> n11;
+    n12 [label="Call twice (line 10)", fillcolor="#ead1dc"];
+    n11 -> n12;
+    n13 [label="ArrayIndex v", fillcolor="#ffffff"];
+    n12 -> n13;
+    n14 [label="IntLit 1", fillcolor="#ffffff"];
+    n13 -> n14;
+    n15 [label="Endl", fillcolor="#f3f3f3"];
+    n11 -> n15;
+    n16 [label="Return (line 11)", fillcolor="#fce5cd"];
+    n7 -> n16;
+    n17 [label="IntLit 0", fillcolor="#ffffff"];
+    n16 -> n17;
+}
+=== Three Address Code ===
+    v[0] = 3
+    v[1] = 4
+    t1 = v[1]
+    param t1
+    t2 = call twice 1
+    out t2
+    outnl
+    goto L1
+L1:
+func twice:
+    formal x
+    t3 = x * 2
+    return t3
+    endfunc
+=== Optimized TAC ===
+    v[0] = 3
+    v[1] = 4
+    t1 = v[1]
+    param t1
+    t2 = call twice 1
+    out t2
+    outnl
+func twice:
+    formal x
+    t3 = x * 2
+    return t3
+    endfunc
+=== Program Output ===
+8

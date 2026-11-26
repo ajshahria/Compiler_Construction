@@ -1,0 +1,44 @@
+exit 0
+digraph AST {
+    node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=11];
+    edge [arrowsize=0.7];
+    n0 [label="Program Dot (line 3)", fillcolor="#d9d2e9"];
+    n1 [label="Block (line 8)", fillcolor="#f3f3f3"];
+    n0 -> n1;
+    n2 [label="ArrayDecl int (line 9)", fillcolor="#cfe2f3"];
+    n1 -> n2;
+    n3 [label="Identifier a (line 9)", fillcolor="#ffffff"];
+    n2 -> n3;
+    n4 [label="ArrayInit (line 9)", fillcolor="#f3f3f3"];
+    n2 -> n4;
+    n5 [label="Literal 1 (line 9)", fillcolor="#ffffff"];
+    n4 -> n5;
+    n6 [label="Literal 2 (line 9)", fillcolor="#ffffff"];
+    n4 -> n6;
+    n7 [label="Print (line 10)", fillcolor="#f3f3f3"];
+    n1 -> n7;
+    n8 [label="Call twice (line 10)", fillcolor="#ead1dc"];
+    n7 -> n8;
+    n9 [label="ArrayIndex a (line 10)", fillcolor="#ffffff"];
+    n8 -> n9;
+    n10 [label="Literal 1 (line 10)", fillcolor="#ffffff"];
+    n9 -> n10;
+    n11 [label="Method int twice (line 4)", fillcolor="#d9d2e9"];
+    n0 -> n11;
+    n12 [label="Params (line 4)", fillcolor="#d9d2e9"];
+    n11 -> n12;
+    n13 [label="Param int (line 4)", fillcolor="#d9d2e9"];
+    n12 -> n13;
+    n14 [label="Identifier x (line 4)", fillcolor="#ffffff"];
+    n13 -> n14;
+    n15 [label="Block (line 4)", fillcolor="#f3f3f3"];
+    n11 -> n15;
+    n16 [label="Return (line 5)", fillcolor="#fce5cd"];
+    n15 -> n16;
+    n17 [label="BinaryOp * (line 5)", fillcolor="#fff2cc"];
+    n16 -> n17;
+    n18 [label="Identifier x (line 5)", fillcolor="#ffffff"];
+    n17 -> n18;
+    n19 [label="Literal 2 (line 5)", fillcolor="#ffffff"];
+    n17 -> n19;
+}

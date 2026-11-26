@@ -27,7 +27,9 @@ source file
 | Feature | Example |
 |---|---|
 | Headers | `#include <iostream>` is required (it enables `cout`, `cin` and `endl`); 84 standard C and C++ headers are recognised, `#include` lines must come before any code, and `using namespace std;` is accepted. |
-| Main function | `int main() { ... }` or `int main(void)`. `void main()` is rejected (`'main' must return int`). Only variable declarations (globals) may appear outside `main`. |
+| Main function | `int main() { ... }` or `int main(void)`. `void main()` is rejected (`'main' must return int`). Only variable declarations (globals) and other functions may appear outside `main`. |
+| Functions | `int add(int a, int b) { return a + b; }`, `void show(float v) { ... }`, called as `add(1, 2)` or `show(x);`. Recursion works. Each argument must fit its parameter, and `return` must match the function's type. |
+| Arrays | `int a[5];`, `float b[] = {1.5, 2};`, `a[i] = 3;`, `a[i] += 2;`, `a[i]++`, `cin >> a[i];`. One dimension, `int` index; `--run` reports an index out of bounds. |
 | Types | `int`, `float`, `double`, `bool`, `long`, `long long`, `short`, with `const`; several declarators per line: `int a = 1, b;` |
 | Output and input | `cout << "sum = " << x << endl;`, `std::cout`, `cin >> a >> b;` |
 | Loops and branches | `for`, `do-while`, `switch` / `case` / `default`, `break`, `continue`, `return` |
@@ -66,6 +68,7 @@ python examples/demo_programs.py                            # build/demo.html: s
 | `--headers` | the `#include` headers, with their line, category and role |
 | `--tokens` | the token stream |
 | `--ast` | the Abstract Syntax Tree, indented |
+| `--dot` | the Abstract Syntax Tree as a Graphviz graph (bonus): `build/compiler.exe --dot prog.cpp > ast.dot`, then `dot -Tpng ast.dot -o ast.png` |
 | `--symtab` | the symbol table: name, type, scope, line |
 | `--tac` | Three Address Code (the default) |
 | `--opt` | optimized TAC (bonus) |
@@ -176,10 +179,28 @@ c++_compiler/
 └── tests/                         see Tests below
 ```
 
+## Arrays and functions in the TAC (bonus)
+
+An array element is read with `t1 = a[i]` and written with `a[i] = t1`; the index counts
+elements. A function is a `func f:` ... `endfunc` block: each parameter is taken with
+`formal x`, and `return t1` leaves it. A call passes each argument with `param`, then calls:
+
+```text
+func square:            param 4
+formal x                t2 = call square 1
+t1 = x * x              print t2
+return t1
+endfunc
+```
+
+A `func` block is skipped when execution reaches it; its code only runs through a call.
+A call saves the called function's own variables, so recursion works with `--run` and in
+the `--asm` output.
+
 ## Tests
 
 ```bash
-make test                          # build, then run all 48 tests
+make test                          # build, then run all 51 tests
 bash tests/run_tests.sh --update   # rewrite the .expected files after an intended change
 ```
 
@@ -187,9 +208,9 @@ Each `tests/<category>/<name>.cpp` is paired with `<name>.expected`, which holds
 
 | Folder | Count | Programs |
 |---|---|---|
-| `valid/` | 23 | beginner_main, cin_float_bool, cpp_extras, fibonacci, floats_scopes, gcd_palindrome, global_variable, harmonic_ternary, headers_iostream, indented_include, loops_switch_bool, manual_sample_no_header, nested_control, primes, sample_manual, switch_continue_logic, temperature_collatz, textbook_for_loop, textbook_hello, textbook_if_else, textbook_sum, textbook_using_hello, textbook_using_sum |
+| `valid/` | 25 | arrays_functions, beginner_main, cin_float_bool, cpp_extras, dot_ast, fibonacci, floats_scopes, gcd_palindrome, global_variable, harmonic_ternary, headers_iostream, indented_include, loops_switch_bool, manual_sample_no_header, nested_control, primes, sample_manual, switch_continue_logic, temperature_collatz, textbook_for_loop, textbook_hello, textbook_if_else, textbook_sum, textbook_using_hello, textbook_using_sum |
 | `lexical/` | 7 | bad_identifier, bad_string, include_after_code, invalid_char, missing_header, unknown_header, unterminated_comment |
 | `syntax/` | 9 | bad_main, main_without_braces, main_without_type, missing_semicolon, no_main, statement_outside_main, two_mains, unbalanced, void_main |
-| `semantic/` | 9 | cout_without_iostream, invalid_assignment, invalid_expression, jump_errors, redeclaration, scope_violation, ternary_error, type_mismatch, undeclared |
+| `semantic/` | 10 | array_function_errors, cout_without_iostream, invalid_assignment, invalid_expression, jump_errors, redeclaration, scope_violation, ternary_error, type_mismatch, undeclared |
 
-Current result: **48 passed, 0 failed**.
+Current result: **51 passed, 0 failed**.

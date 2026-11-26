@@ -62,7 +62,17 @@ static bool fold(const Instr& in, Operand& out) {
 
 static bool definesResult(Op op) {
     return op == Op::Assign || op == Op::Not || op == Op::Neg || op == Op::IntToFloat ||
-           op == Op::Read || isBinaryOp(op);
+           op == Op::Read || isBinaryOp(op) || op == Op::Load || op == Op::Formal;
+}
+
+// The same, for a whole instruction: a call defines its result when it has one.
+static bool definesResult(const Instr& in) {
+    return definesResult(in.op) || (in.op == Op::Call && in.result.kind != Operand::None);
+}
+
+// Join points and function boundaries: nothing known about variables survives them.
+static bool isBoundary(Op op) {
+    return op == Op::Label || op == Op::Func || op == Op::EndFunc;
 }
 
 // Pass 1: constant propagation + folding + branch simplification, per basic block.
@@ -71,7 +81,7 @@ static std::vector<Instr> foldPass(const std::vector<Instr>& code) {
     std::map<std::string, Operand> known;   // name -> constant value
     for (size_t k = 0; k < code.size(); k++) {
         Instr in = code[k];
-        if (in.op == Op::Label) { known.clear(); out.push_back(in); continue; }   // join point
+        if (isBoundary(in.op)) { known.clear(); out.push_back(in); continue; }   // join point
 
         // substitute known constants into the operands
         if (in.a.isName() && known.count(in.a.name)) in.a = known[in.a.name];
@@ -83,6 +93,11 @@ static std::vector<Instr> foldPass(const std::vector<Instr>& code) {
         }
         if (in.op == Op::Goto) { out.push_back(in); continue; }
 
+        if (in.op == Op::Call) {               // may change any global variable
+            known.clear();
+            out.push_back(in);
+            continue;
+        }
         if (definesResult(in.op)) {
             bool aConst = in.a.isConst(), bConst = in.b.isConst() || in.b.kind == Operand::None;
             Operand folded;
@@ -103,10 +118,10 @@ static std::vector<Instr> unreachablePass(const std::vector<Instr>& code) {
     std::vector<Instr> out;
     bool dead = false;
     for (size_t k = 0; k < code.size(); k++) {
-        if (code[k].op == Op::Label) dead = false;
+        if (isBoundary(code[k].op)) dead = false;
         if (dead) continue;
         out.push_back(code[k]);
-        if (code[k].op == Op::Goto) dead = true;
+        if (code[k].op == Op::Goto || code[k].op == Op::Return) dead = true;
     }
     return out;
 }
@@ -124,12 +139,14 @@ static std::vector<Instr> deadTempPass(const std::vector<Instr>& code) {
     countUses(code, uses);
     std::vector<Instr> out;
     for (size_t k = 0; k < code.size(); k++) {
-        const Instr& in = code[k];
-        if (definesResult(in.op) && in.result.kind == Operand::Temp && uses[in.result.name] == 0)
+        Instr in = code[k];
+        if (in.op == Op::Call && in.result.kind == Operand::Temp && uses[in.result.name] == 0)
+            in.result = Operand();   // value unused: the call stays (it may print)
+        else if (definesResult(in) && in.result.kind == Operand::Temp && uses[in.result.name] == 0)
             continue;   // dead temp
         // collapse: previous instr defines temp t used only here, this is x = t
         if (in.op == Op::Assign && in.a.kind == Operand::Temp && uses[in.a.name] == 1 &&
-            !out.empty() && definesResult(out.back().op) &&
+            !out.empty() && definesResult(out.back()) &&
             out.back().result.kind == Operand::Temp && out.back().result.name == in.a.name) {
             out.back().result = in.result;
             continue;

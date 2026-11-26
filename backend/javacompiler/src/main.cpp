@@ -37,7 +37,7 @@ extern Node* syntaxRoot;
 
 namespace {
 
-enum class Mode { Headers, Tokens, Ast, Symtab, Tac, Opt, Asm, Run, All };
+enum class Mode { Headers, Tokens, Ast, Dot, Symtab, Tac, Opt, Asm, Run, All };
 
 void usage(const char* program) {
     std::cerr << "Usage: " << program << " [option] <source-file> [-o output-file]\n"
@@ -45,6 +45,8 @@ void usage(const char* program) {
                  "  --headers     list the import lines found (Java's #include)\n"
                  "  --tokens     print the token stream (lexical analysis)\n"
                  "  --ast         print the abstract syntax tree\n"
+                 "  --dot         print the abstract syntax tree as a Graphviz graph\n"
+                 "                (render it with: dot -Tpng ast.dot -o ast.png)\n"
                  "  --symtab      print the symbol table after semantic analysis\n"
                  "  --tac         print three address code (default)\n"
                  "  --opt         print optimized three address code\n"
@@ -66,11 +68,12 @@ const char* tokenCategory(int token) {
     case TRUE: case FALSE: return "BOOL_LITERAL";
     case INT: case FLOAT: case BOOLEAN:
     case IF: case ELSE: case WHILE: case FOR: case DO: case SWITCH: case CASE:
-    case DEFAULT: case BREAK: case PRINT: case PRINTLN:
+    case DEFAULT: case BREAK: case CONTINUE: case RETURN: case PRINT: case PRINTLN:
     case CLASS: case PUBLIC: case STATIC: case VOID: case MAIN: case STRING:
     case SCANNER: case NEW: case SYSTEM_IN:
         return "KEYWORD";
     case SCANNER_READ:  return "METHOD_CALL";
+    case LENGTH:        return "ARRAY_LENGTH";
     case EQ: case NE: case LE: case GE: return "RELATIONAL_OP";
     case AND: case OR:                  return "LOGICAL_OP";
     case INC: case DEC:                 return "INCREMENT_OP";
@@ -100,11 +103,17 @@ void heading(std::ostream& out, const char* title) {
  * --asm and --run use the optimized TAC. Returns the exit status: 1 if the
  * program stopped with a runtime error. */
 int backEnd(const std::string& tac, Mode mode, std::ostream& out) {
-    std::vector<std::pair<std::string, Type>> declared = declaredVariables();
+    std::vector<DeclaredName> declared = declaredVariables();
     std::vector<TacVar> vars;
-    for (const auto& d : declared)
-        vars.push_back(TacVar{d.first.c_str(), d.second == Type::Float ? TAC_FLOAT
-                                             : d.second == Type::Bool ? TAC_BOOL : TAC_INT});
+    for (const DeclaredName& d : declared) {
+        TacVar v;
+        v.name = d.tacName.c_str();
+        v.type = d.type == Type::Float ? TAC_FLOAT : d.type == Type::Bool ? TAC_BOOL : TAC_INT;
+        v.length = d.length;
+        v.is_function = d.isFunction;
+        v.function = d.function.empty() ? nullptr : d.function.c_str();
+        vars.push_back(v);
+    }
     char error[256];
     TacProgram* program = tac_build(tac.c_str(), vars.data(), static_cast<int>(vars.size()),
                                     error, sizeof error);
@@ -123,7 +132,13 @@ int backEnd(const std::string& tac, Mode mode, std::ostream& out) {
     }
     if (mode == Mode::Asm || mode == Mode::All) {
         if (mode == Mode::All) heading(out, "X86 ASSEMBLY");
-        char* text = tac_assembly(program, "the MiniJava compiler");
+        char* text = tac_assembly(program, "the MiniJava compiler", error, sizeof error);
+        if (!text) {
+            out.flush();
+            std::cerr << error << '\n';
+            tac_free(program);
+            return 1;
+        }
         out << text;
         std::free(text);
     }
@@ -156,6 +171,7 @@ int main(int argc, char* argv[]) {
         if (arg == "--headers")                      mode = Mode::Headers;
         else if (arg == "--tokens")                  mode = Mode::Tokens;
         else if (arg == "--ast")                     mode = Mode::Ast;
+        else if (arg == "--dot")                     mode = Mode::Dot;
         else if (arg == "--symtab")                  mode = Mode::Symtab;
         else if (arg == "--tac")                     mode = Mode::Tac;
         else if (arg == "--opt")                     mode = Mode::Opt;
@@ -228,6 +244,12 @@ int main(int argc, char* argv[]) {
         if (mode == Mode::All) heading(out, "ABSTRACT SYNTAX TREE");
         printAst(syntaxRoot, out);
         if (mode == Mode::Ast) { freeTree(syntaxRoot); return 0; }
+    }
+
+    if (mode == Mode::Dot) {
+        printDot(syntaxRoot, out);
+        freeTree(syntaxRoot);
+        return 0;
     }
 
     // ---- Phase 3: semantic analysis with the symbol table ----

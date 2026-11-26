@@ -89,3 +89,29 @@ translated to labels and jumps in the Three Address Code.
 
 `stmt → error ';'` skips to the end of a broken statement and `block → '{' stmt_list error '}'`
 skips to the end of a broken block, so several syntax errors can be reported in one run.
+
+## Arrays and functions (bonus, manual section 14)
+
+These productions extend the grammar above (`src/parser/parser.y`):
+
+```bnf
+stmt          ::= ... | function_def | call_stmt
+function_def  ::= type IDENTIFIER "(" params ")" block
+                | "void" IDENTIFIER "(" params ")" block
+params        ::= ε | "void" | param_list
+param_list    ::= type IDENTIFIER | param_list "," type IDENTIFIER
+call_stmt     ::= IDENTIFIER "(" call_args ")" ";"
+call_args     ::= ε | arg_list
+arg_list      ::= expr | arg_list "," expr
+declarator    ::= ... | IDENTIFIER "[" INT_LIT "]"
+                | IDENTIFIER "[" INT_LIT "]" "=" "{" arg_list "}"
+                | IDENTIFIER "[" "]" "=" "{" arg_list "}"
+simple_assign ::= ... | IDENTIFIER "[" expr "]" "=" expr
+                | IDENTIFIER "[" expr "]" ("+=" | "-=" | "*=" | "/=") expr
+                | IDENTIFIER "[" expr "]" ("++" | "--")
+cin_list      ::= ... | IDENTIFIER "[" expr "]" | cin_list ">>" IDENTIFIER "[" expr "]"
+expr          ::= ... | IDENTIFIER "[" expr "]" | IDENTIFIER "(" call_args ")"
+```
+
+`a[i] += e` is rewritten to `a[i] = a[i] + e` in the parser, like `x += e`. Functions are
+generated after `main` in the TAC (`func f:` ... `endfunc`). The grammar has no conflicts.

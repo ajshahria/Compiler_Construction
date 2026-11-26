@@ -92,11 +92,35 @@ Symbol *symtab_insert(SymbolTable *table, char *name, Type type, int line)
     return s;
 }
 
+/* The type as shown by --symtab: int, an array int[5], or a function int(int,float). */
+static void type_text(const Symbol *s, char *type, size_t size)
+{
+    snprintf(type, size, "%s", type_name(s->type));
+    if (s->length > 0)
+        snprintf(type + strlen(type), size - strlen(type), "[%ld]", s->length);
+    if (s->is_function) {
+        snprintf(type + strlen(type), size - strlen(type), "(");
+        for (size_t i = 0; s->params != NULL && i < s->params->count; i++)
+            snprintf(type + strlen(type), size - strlen(type), "%s%s", i ? "," : "",
+                     type_name(s->params->items[i].type));
+        snprintf(type + strlen(type), size - strlen(type), ")");
+    }
+}
+
 void symtab_print(SymbolTable *table, FILE *out)
 {
-    fprintf(out, "%-16s %-6s %-6s %-6s %-6s %s\n", "Name", "Type", "Scope", "Depth", "Line", "TAC name");
-    fprintf(out, "%-16s %-6s %-6s %-6s %-6s %s\n", "----", "----", "-----", "-----", "----", "--------");
-    for (Symbol *s = table->first_declared; s != NULL; s = s->next_declared)
-        fprintf(out, "%-16s %-6s %-6d %-6d %-6d %s\n",
-                s->name, type_name(s->type), s->scope_id, s->depth, s->line, s->tac_name);
+    char type[96];
+    int width = 6;                       /* the Type column fits the longest type */
+    for (Symbol *s = table->first_declared; s != NULL; s = s->next_declared) {
+        type_text(s, type, sizeof type);
+        if ((int)strlen(type) > width)
+            width = (int)strlen(type);
+    }
+    fprintf(out, "%-16s %-*s %-6s %-6s %-6s %s\n", "Name", width, "Type", "Scope", "Depth", "Line", "TAC name");
+    fprintf(out, "%-16s %-*s %-6s %-6s %-6s %s\n", "----", width, "----", "-----", "-----", "----", "--------");
+    for (Symbol *s = table->first_declared; s != NULL; s = s->next_declared) {
+        type_text(s, type, sizeof type);
+        fprintf(out, "%-16s %-*s %-6d %-6d %-6d %s\n",
+                s->name, width, type, s->scope_id, s->depth, s->line, s->tac_name);
+    }
 }

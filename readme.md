@@ -22,14 +22,14 @@ Semantic analyzer + Symbol Table (nested scopes)                  undeclared, re
 Intermediate code generator    ──►  Three Address Code (TAC)      the required final output
    │
    ▼  bonus
-Optimizer · TAC interpreter · x86 assembly
+Optimizer (--opt) · AST graph (--dot) · TAC interpreter (--run) · x86 assembly (--asm)
 ```
 
 | Compiler | Folder | Executable | Written in | Author | Style it also accepts (bonus) |
 |---|---|---|---|---|---|
-| **tricora** (C) | [`backend/c-compiler`](backend/c-compiler) | `build/tricora` | C | Sabika Rahman | `#include`, `int main()`, `return`, `printf`, `scanf` |
-| **compiler** (C++) | [`backend/c++_compiler`](backend/c++_compiler) | `build/compiler.exe` | C++11 | Abdul Julil Shahria | `#include`, `int main()`, `cout`, `cin`, `for`, `do-while`, `switch`, `continue`, `?:`, `++`, `+=` |
-| **minijavac** (Java) | [`backend/javacompiler`](backend/javacompiler) | `build/minijavac` | C++17 | Saima Suchi | `class` with `main`, `import`, `System.out.println`, `Scanner`, `boolean`, `for`, `do-while`, `switch`, `++` |
+| **tricora** (C) | [`backend/c-compiler`](backend/c-compiler) | `build/tricora` | C | Sabika Rahman | `#include`, `int main()`, `return`, `printf`, `scanf`, functions, arrays, `for`, `do-while`, `switch`, `continue`, `++`, `+=` |
+| **compiler** (C++) | [`backend/c++_compiler`](backend/c++_compiler) | `build/compiler.exe` | C++11 | Abdul Julil Shahria | `#include`, `int main()`, `cout`, `cin`, functions, arrays, `for`, `do-while`, `switch`, `continue`, `?:`, `++`, `+=` |
+| **minijavac** (Java) | [`backend/javacompiler`](backend/javacompiler) | `build/minijavac` | C++17 | Saima Suchi | `class` with `main`, `import`, `System.out.println`, `Scanner`, `boolean`, static methods, arrays, `for`, `do-while`, `switch`, `continue`, `++` |
 
 A program written exactly as in the manual compiles with **all three compilers, with no flags**. Each compiler's README explains its own features, options and output in detail.
 
@@ -41,6 +41,23 @@ A program written exactly as in the manual compiles with **all three compilers, 
 | Saima Suchi | Java compiler (`backend/javacompiler`) |
 | Sabika Rahman | C compiler (`backend/c-compiler`) |
 
+## Manual checklist
+
+Each requirement of the lab manual and where it is met. Every row holds for all three compilers.
+
+| Manual section | Requirement | Status |
+|---|---|---|
+| 4.1 | Lexer: keywords, identifiers, constants, operators, delimiters; comments and whitespace discarded; invalid tokens reported with their line | ✅ |
+| 4.2 | Unambiguous CFG in Bison, syntax errors with line numbers, error recovery with the `error` token | ✅ (no Bison conflicts) |
+| 4.3 | AST with one node per construct, printed as an indented tree | ✅ `--ast` (Graphviz: `--dot`) |
+| 4.4 | Symbol table with name, type, scope and declaration line; nested scopes | ✅ `--symtab` |
+| 4.5 | Undeclared variable, redeclaration, scope violation, type mismatch, invalid assignment, invalid expression | ✅ all six, with line numbers |
+| 4.6 | TAC for arithmetic (with precedence), relational and logical expressions, `if`, `if-else`, `while`, `print` | ✅ `--tac` (the default output) |
+| 5 | The fixed language: `int float bool`, `if`/`else`, `while`, `print`, nested blocks, `+ - * / %`, `< > <= >= == !=`, `&& \|\| !` | ✅ the manual's sample (5.5) and TAC example (4.6) give exactly the manual's output |
+| 8 | Directory layout: `docs/`, `src/` by phase, `tests/`, `examples/`, `Makefile`, `README.md` | ✅ |
+| 14 | Optional bonus features | ✅ every row of the table, see [Bonus features](#bonus-features-manual-section-14) |
+| 15 | Tests: a valid program, a lexical error, a syntax error, one program per semantic rule, each with its expected output | ✅ see [Testing](#testing) |
+
 ## Features
 
 ### Required modules (manual section 4)
@@ -49,19 +66,37 @@ A program written exactly as in the manual compiles with **all three compilers, 
 |---|---|---|
 | Lexical analyzer | Keywords, identifiers, int/float/bool constants, every operator and delimiter. Discards `//` and `/* */` comments and whitespace. Reports an invalid token with its line number. | `src/lexer/lexer.l` |
 | Syntax analyzer | An unambiguous CFG in Bison, with precedence and associativity declarations and no conflicts. Syntax errors carry line numbers. The `error` token gives recovery, so several errors are reported in one run. | `src/parser/parser.y` |
-| Abstract Syntax Tree | One node per construct (declaration, assignment, binary and unary operations, if, while, print, block). Printed as an indented tree with `--ast`. | `src/ast/` |
+| Abstract Syntax Tree | One node per construct (declaration, assignment, binary and unary operations, if, while, print, block). Printed as an indented tree with `--ast`, or as a Graphviz graph with `--dot`. | `src/ast/` |
 | Symbol table | Name, type, scope and declaration line of every identifier, kept as a stack of scopes, so a variable declared in a block is not visible outside it. Printed with `--symtab`. | `src/symbol_table/` |
 | Semantic analyzer | Undeclared variable, redeclaration in the same scope, scope violation, type mismatch, invalid assignment, invalid expression (for example `&&` on numbers). | `src/semantic/` |
 | Intermediate code | Three Address Code with temporaries `t1, t2, …` and labels `L1, L2, …`: arithmetic with operator precedence, relational and logical expressions, `if`, `if-else` and `while` (with `ifFalse … goto` and `goto`), and `print`. | C: `src/codegen/` · C++: `src/tac/` · Java: `src/codegen/` |
 
 ### Bonus features (manual section 14)
 
-- **Language extensions.** C++: `for`, `do-while`, `switch`, `break`, `continue`, `?:`, `++`/`--`, `+= -= *= /=`. Java: `for`, `do-while`, `switch`, `break`, `++`/`--`.
-- **Real-language program forms.** C: `#include <stdio.h>`, `int main()`, `return`, type-checked `printf`. C++: `#include <iostream>`, `int main()`, `cout`. Java: a `class` with `main`, `System.out.println`, `import`.
+Every feature in the manual's section 14 table is implemented in all three compilers:
+
+| Feature (section 14) | C | C++ | Java |
+|---|---|---|---|
+| Arrays | `int a[5];` `int b[] = {1, 2};` `a[i]` | `int a[5];` `int b[] = {1, 2};` `a[i]`, `cin >> a[i]` | `int[] a = new int[5];` `int[] b = {1, 2};` `a[i]`, `a.length` |
+| Functions, calls, parameters, `return` | `int f(int x) { ... }`, `void g()`, recursion | `int f(int x) { ... }`, `void g()`, recursion | `static int f(int x) { ... }`, `static void g()`, recursion |
+| `for` loop | ✅ | ✅ | ✅ |
+| `do-while` loop | ✅ | ✅ | ✅ |
+| `switch-case` (with `break`, `default`) | ✅ | ✅ | ✅ |
+| Unary operators, `++`/`--` | ✅ (also `+= -= *= /= %=`, and `continue`) | ✅ (also `+= -= *= /=`, `continue`, `?:`) | ✅ (also `continue`) |
+| Constant folding (`--opt`) | ✅ | ✅ | ✅ |
+| Dead code elimination (`--opt`) | ✅ | ✅ | ✅ |
+| AST visualization with Graphviz (`--dot`) | ✅ | ✅ | ✅ |
+| Improved error recovery | ✅ | ✅ | ✅ |
+| Graphical user interface | ✅ one web IDE for all three compilers | ✅ | ✅ |
+
+In the TAC, an array element is read with `t1 = a[i]` and written with `a[i] = t1` (the index counts elements). A function is a `func f:` … `endfunc` block whose parameters are taken with `formal x`; a call passes each argument with `param x`, then `t2 = call f 2`. A call saves the called function's own variables, so recursion works in `--run` and in the `--asm` output.
+
+- **Language extensions** beyond that table: C++ `?:` and `+= -= *= /=`, C `+= -= *= /= %=`, `continue` in all three.
+- **Real-language program forms.** C: `#include <stdio.h>`, `int main()` and other functions, `return`, type-checked `printf`. C++: `#include <iostream>`, `int main()` and other functions, `cout`. Java: a `class` with `main` and static methods, `System.out.println`, `import`.
 - **Program input** in all three: C `scanf`, C++ `cin >>`, Java `Scanner` (`nextInt`, `nextFloat`, `nextDouble`, `nextBoolean`). Each read becomes the TAC instruction `read x`.
 - **Headers phase** in all three (`--headers`): the `#include` headers (C, C++) or `import` lines (Java), with their line numbers.
 - **Optimization** (`--opt`): constant propagation and folding, dead and unreachable code elimination, removal of unused temporaries.
-- **AST visualization**: the web interface draws the AST as a tree diagram.
+- **AST visualization**: `--dot` prints the AST as a Graphviz graph (`dot -Tpng ast.dot -o ast.png`), and the web interface draws the AST as a tree diagram.
 - **Improved error recovery**: errors in several statements are reported in one run, with hints such as "missing ';' at the end of line 5?".
 - **Graphical user interface**: a browser IDE for all three compilers, which also works on phones (see [Web interface](#web-interface)).
 - **Beyond the manual's scope** (not graded): a TAC interpreter (`--run`) and 32-bit x86 assembly output (`--asm`).
@@ -80,6 +115,7 @@ The authoritative description is section 5 of the manual. The formal CFG of each
 | Literals | `42`, `3.14`, `true`, `false` |
 | Identifiers | a letter or `_`, then letters, digits or `_` |
 | Comments | `// line` and `/* block */` |
+| Bonus (section 14) | arrays, functions with parameters and `return`, `for`, `do-while`, `switch`, `break`, `continue`, `++`/`--` |
 
 ## Requirements
 
@@ -125,6 +161,7 @@ Each phase can be shown on its own. These options work in all three compilers:
 | `--headers` | the `#include` headers (C, C++) or `import` lines (Java) (bonus) |
 | `--tokens` | the token stream (lexical analysis) |
 | `--ast` | the Abstract Syntax Tree, indented |
+| `--dot` | the Abstract Syntax Tree as a Graphviz graph (bonus); render it with `dot -Tpng ast.dot -o ast.png` |
 | `--symtab` | the symbol table: name, type, scope, line declared |
 | `--tac` | Three Address Code (the default) |
 | `--opt` | optimized TAC (bonus) |
@@ -209,10 +246,10 @@ Every compiler has a `tests/` folder with the four categories required by sectio
 
 | Category | C | C++ | Java | Demonstrates |
 |---|---|---|---|---|
-| `valid/` | 19 | 23 | 19 | programs that compile cleanly to TAC, including the manual's sample (5.5) and TAC example (4.6), and programs that read input |
+| `valid/` | 23 | 25 | 22 | programs that compile cleanly to TAC, including the manual's sample (5.5) and TAC example (4.6), programs that read input, loops and switch, arrays and recursive functions, and the `--dot` graph |
 | `lexical/` | 5 | 7 | 5 | invalid characters, invalid identifiers, unterminated comments and strings, unknown headers or imports |
-| `syntax/` | 3 | 9 | 4 | missing semicolons and parentheses, unbalanced braces, several errors in one file |
-| `semantic/` | 12 | 9 | 10 | all six rules of section 4.5, plus printf/scanf, Scanner and initialization checks |
+| `syntax/` | 4 | 9 | 5 | missing semicolons and parentheses, unbalanced braces, a broken `for` / `do-while`, a class without `main`, several errors in one file |
+| `semantic/` | 14 | 10 | 11 | all six rules of section 4.5, plus printf/scanf, Scanner and initialization checks, and the rules for arrays, functions, `break`, `continue` and `switch` |
 
 Run them all:
 
@@ -222,7 +259,7 @@ make -C backend/c++_compiler test
 make -C backend/javacompiler test
 ```
 
-Current result: **C 39/39, C++ 48/48, Java 38/38 passing.** The Docker build runs all three suites, so a deployment fails if any test fails.
+Current result: **C 46/46, C++ 51/51, Java 43/43 passing.** The Docker build runs all three suites, so a deployment fails if any test fails.
 
 ## Web interface
 
@@ -293,7 +330,7 @@ Compiler_Construction/
 │   │   │   ├── symbol_table/     scope stack: insert, lookup, enter and leave scope
 │   │   │   ├── semantic/         type and scope checking
 │   │   │   ├── codegen/          Three Address Code generation
-│   │   │   └── backend/          bonus: optimizer, interpreter, x86 assembly
+│   │   │   └── backend/          bonus: optimizer, interpreter, x86 assembly (shared with the Java compiler)
 │   │   ├── examples/             valid/ and invalid/ sample programs
 │   │   └── tests/                valid/, lexical/, syntax/, semantic/ + run_tests.sh
 │   │

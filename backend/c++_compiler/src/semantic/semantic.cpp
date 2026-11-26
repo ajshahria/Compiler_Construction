@@ -3,6 +3,14 @@
 //   invalid assignment, invalid operands, non-bool conditions,
 //   break/continue outside loops, switch rules, cout/cin without <iostream>.
 // int -> float widening is allowed; every other mixing is an error.
+//
+// Bonus (manual section 14):
+//   arrays    - a positive size and at most that many initial values; an array is only
+//               used with an int index; a variable or function cannot be indexed
+//   functions - defined at the top level; a call names a function with one argument of a
+//               fitting type per parameter; a void function is not a value; return matches
+//               the function's type; main cannot be called. Every function is known before
+//               the program is checked, so functions can call each other (and themselves).
 #include "semantic.h"
 #include "diagnostics.h"
 #include "headers.h"
@@ -13,6 +21,7 @@ static SymbolTable* table;
 static int errors;
 static int loopDepth;      // how many loops we are inside (for 'continue')
 static int switchDepth;    // how many switches we are inside (for 'break')
+static FunctionNode* currentFunction;   // the function being checked (NULL: main or top level)
 
 static void err(int line, const std::string& msg) {
     errors++;
@@ -91,6 +100,55 @@ static Type checkBinary(BinaryNode* b) {
     return TY_BOOL;
 }
 
+// The index of a[i] must be an int.
+static void checkIndex(Node* index, const std::string& array) {
+    Type t = checkExpr(index);
+    if (t != TY_ERROR && t != TY_INT)
+        err(index->line, "array index of '" + array + "' must be int, found " + typeName(t));
+}
+
+// a[i]: returns the array's symbol, or NULL after reporting an error.
+static Symbol* resolveArray(const std::string& name, int line) {
+    Symbol* s = resolve(name, line);
+    if (!s) return NULL;
+    if (s->isFunction || s->length == 0) {
+        err(line, "'" + name + "' is not an array and cannot be indexed");
+        return NULL;
+    }
+    return s;
+}
+
+// f(a, b): one argument of a fitting type per parameter. Returns the return type
+// (TY_VOID for a void function), or TY_ERROR.
+static Type checkCall(CallNode* c) {
+    std::vector<Type> args;
+    for (size_t i = 0; i < c->args.size(); i++) args.push_back(checkExpr(c->args[i]));
+    Symbol* s = table->lookup(c->name);
+    if (!s) {
+        err(c->line, "undeclared function '" + c->name + "'");
+        return TY_ERROR;
+    }
+    if (!s->isFunction) {
+        err(c->line, "'" + c->name + "' is not a function and cannot be called");
+        return TY_ERROR;
+    }
+    if (args.size() != s->params.size()) {
+        std::ostringstream m;
+        m << "function '" << c->name << "' takes " << s->params.size() << " argument(s) but "
+          << args.size() << " were given";
+        err(c->line, m.str());
+        return s->type;
+    }
+    for (size_t i = 0; i < args.size(); i++)
+        if (args[i] != TY_ERROR && !canAssign(s->params[i], args[i])) {
+            std::ostringstream m;
+            m << "argument " << i + 1 << " of '" << c->name << "' must be " << typeName(s->params[i])
+              << ", found " << typeName(args[i]);
+            err(c->line, m.str());
+        }
+    return s->type;
+}
+
 static Type checkExpr(Node* n) {
     Type t = TY_ERROR;
     switch (n->kind) {
@@ -100,7 +158,28 @@ static Type checkExpr(Node* n) {
         case NodeKind::Ident: {
             IdentNode* id = static_cast<IdentNode*>(n);
             Symbol* s = resolve(id->name, id->line);
-            if (s) { id->uname = s->uname; t = s->type; }
+            if (!s) break;
+            if (s->isFunction)
+                err(id->line, "function '" + id->name + "' used without a call: write " + id->name + "(...)");
+            else if (s->length > 0)
+                err(id->line, "array '" + id->name + "' used without an index: write " + id->name + "[i]");
+            else { id->uname = s->uname; t = s->type; }
+            break;
+        }
+        case NodeKind::Index: {
+            IndexNode* x = static_cast<IndexNode*>(n);
+            Symbol* s = resolveArray(x->name, x->line);
+            checkIndex(x->index, x->name);
+            if (s) { x->uname = s->uname; t = s->type; }
+            break;
+        }
+        case NodeKind::Call: {
+            CallNode* c = static_cast<CallNode*>(n);
+            t = checkCall(c);
+            if (t == TY_VOID) {
+                err(c->line, "void function '" + c->name + "' does not return a value");
+                t = TY_ERROR;
+            }
             break;
         }
         case NodeKind::Unary: {
@@ -152,6 +231,59 @@ static void checkIostream(int line, const char* what) {
         err(line, std::string("'") + what + "' is not declared: add #include <iostream>");
 }
 
+// Declares a variable or array in the current scope (reports a redeclaration).
+static Symbol* declare(const std::string& name, Type type, long length, int line) {
+    Symbol extra;
+    extra.length = length > 0 ? length : 0;
+    if (currentFunction) extra.function = currentFunction->name;   // saved around recursive calls
+    Symbol *existing = NULL, *created = NULL;
+    if (!table->insert(name, type, line, &existing, &created, extra)) {
+        std::ostringstream m;
+        m << "redeclaration of '" << name << "' in the same scope (first declared at line "
+          << existing->line << ")";
+        err(line, m.str());
+        return NULL;
+    }
+    return created;
+}
+
+static void checkFunction(FunctionNode* f) {
+    if (currentFunction || table->lookup(f->name) == NULL) {   // inside a block or another function
+        err(f->line, "function '" + f->name + "' must be defined at the top level");
+        return;
+    }
+    int outerLoops = loopDepth, outerSwitches = switchDepth;
+    loopDepth = switchDepth = 0;
+    currentFunction = f;
+    table->enterScope();       // the parameters and the body share one scope
+    for (size_t i = 0; i < f->params.size(); i++) {
+        Symbol* p = declare(f->params[i].name, f->params[i].type, 0, f->params[i].line);
+        if (p) f->params[i].uname = p->uname;
+    }
+    checkList(f->body);
+    table->exitScope();
+    currentFunction = NULL;
+    loopDepth = outerLoops;
+    switchDepth = outerSwitches;
+}
+
+static void checkReturn(ReturnNode* r) {
+    Type t = r->value ? checkExpr(r->value) : TY_VOID;
+    if (!currentFunction) {     // main: an int (or bool) status
+        if (t != TY_ERROR && t != TY_VOID && t != TY_INT && t != TY_BOOL)
+            err(r->line, std::string("return value must be int, found ") + typeName(t));
+        return;
+    }
+    const std::string& name = currentFunction->name;
+    Type want = currentFunction->retType;
+    if (want == TY_VOID && t != TY_VOID)
+        err(r->line, "void function '" + name + "' cannot return a value");
+    else if (want != TY_VOID && t == TY_VOID)
+        err(r->line, "function '" + name + "' must return a value of type " + typeName(want));
+    else if (t != TY_ERROR && t != TY_VOID && !canAssign(want, t))
+        err(r->line, "function '" + name + "' returns " + typeName(want) + ", found " + typeName(t));
+}
+
 static void checkStmt(Node* n) {
     if (!n) return;
     switch (n->kind) {
@@ -165,17 +297,31 @@ static void checkStmt(Node* n) {
             break;
         case NodeKind::VarDecl: {
             VarDeclNode* d = static_cast<VarDeclNode*>(n);
+            if (d->length != 0) {       // an array
+                for (size_t i = 0; i < d->initList.size(); i++) {
+                    Type it = checkExpr(d->initList[i]);
+                    if (it != TY_ERROR && !canAssign(d->declType, it)) {
+                        std::ostringstream m;
+                        m << "type mismatch: value " << i + 1 << " of array '" << d->name << "' is "
+                          << typeName(it) << ", expected " << typeName(d->declType);
+                        err(d->line, m.str());
+                    }
+                }
+                if (d->length < 0)
+                    err(d->line, "array '" + d->name + "' must have a positive size");
+                else if ((long)d->initList.size() > d->length) {
+                    std::ostringstream m;
+                    m << "too many values for array '" << d->name << "' (size " << d->length << ", "
+                      << d->initList.size() << " values)";
+                    err(d->line, m.str());
+                }
+                if (Symbol* s = declare(d->name, d->declType, d->length > 0 ? d->length : 1, d->line))
+                    d->uname = s->uname;
+                break;
+            }
             // Check the initializer first: 'int x = x;' must not see the new x.
             Type it = d->init ? checkExpr(d->init) : TY_ERROR;
-            Symbol *existing = NULL, *created = NULL;
-            if (!table->insert(d->name, d->declType, d->line, &existing, &created)) {
-                std::ostringstream m;
-                m << "redeclaration of '" << d->name << "' in the same scope (first declared at line "
-                  << existing->line << ")";
-                err(d->line, m.str());
-            } else {
-                d->uname = created->uname;
-            }
+            if (Symbol* s = declare(d->name, d->declType, 0, d->line)) d->uname = s->uname;
             if (d->init && it != TY_ERROR && !canAssign(d->declType, it))
                 err(d->line, std::string("type mismatch: cannot initialize ") + typeName(d->declType) +
                     " '" + d->name + "' with a value of type " + typeName(it));
@@ -184,8 +330,24 @@ static void checkStmt(Node* n) {
         case NodeKind::Assign: {
             AssignNode* a = static_cast<AssignNode*>(n);
             Type vt = checkExpr(a->value);
+            if (a->index) {             // a[i] = e
+                Symbol* s = resolveArray(a->name, a->line);
+                checkIndex(a->index, a->name);
+                if (!s) break;
+                a->uname = s->uname;
+                a->type = s->type;
+                if (vt != TY_ERROR && !canAssign(s->type, vt))
+                    err(a->line, std::string("invalid assignment: cannot assign ") + typeName(vt) +
+                        " to an element of " + typeName(s->type) + " array '" + a->name + "'");
+                break;
+            }
             Symbol* s = resolve(a->name, a->line);
             if (!s) break;
+            if (s->isFunction || s->length > 0) {
+                err(a->line, std::string("invalid assignment: cannot assign to the ") +
+                    (s->isFunction ? "function '" : "whole array '") + a->name + "'");
+                break;
+            }
             a->uname = s->uname;
             a->type = s->type;
             if (vt != TY_ERROR && !canAssign(s->type, vt))
@@ -225,15 +387,9 @@ static void checkStmt(Node* n) {
             if (loopDepth == 0)
                 err(n->line, "'continue' statement not within a loop");
             break;
-        case NodeKind::Return: {
-            ReturnNode* r = static_cast<ReturnNode*>(n);
-            if (r->value) {
-                Type t = checkExpr(r->value);
-                if (t != TY_ERROR && t != TY_INT && t != TY_BOOL)
-                    err(r->line, std::string("return value must be int, found ") + typeName(t));
-            }
+        case NodeKind::Return:
+            checkReturn(static_cast<ReturnNode*>(n));
             break;
-        }
         case NodeKind::Switch: {
             SwitchNode* s = static_cast<SwitchNode*>(n);
             Type t = checkExpr(s->expr);
@@ -275,14 +431,49 @@ static void checkStmt(Node* n) {
             CinNode* c = static_cast<CinNode*>(n);
             checkIostream(c->line, "cin");
             for (size_t i = 0; i < c->vars.size(); i++) {
-                IdentNode* v = c->vars[i];
+                if (c->vars[i]->kind == NodeKind::Index) {     // cin >> a[i]
+                    checkExpr(c->vars[i]);
+                    continue;
+                }
+                IdentNode* v = static_cast<IdentNode*>(c->vars[i]);
                 Symbol* s = resolve(v->name, v->line);
-                if (s) { v->uname = s->uname; v->type = s->type; }
+                if (s && (s->isFunction || s->length > 0))
+                    err(v->line, "cin cannot read into " + std::string(s->isFunction ? "function '" : "array '") +
+                        v->name + "'" + (s->isFunction ? "" : ": read one element, " + v->name + "[i]"));
+                else if (s) { v->uname = s->uname; v->type = s->type; }
             }
             break;
         }
+        case NodeKind::Call:            // f(x); - a void function may be called as a statement
+            checkCall(static_cast<CallNode*>(n));
+            break;
+        case NodeKind::Function:
+            checkFunction(static_cast<FunctionNode*>(n));
+            break;
         default:
             break;
+    }
+}
+
+// Every function at the top level is entered in the global scope first.
+static void declareFunctions(BlockNode* program) {
+    for (size_t i = 0; i < program->stmts.size(); i++) {
+        Node* s = program->stmts[i];
+        if (!s || s->kind != NodeKind::Function) continue;
+        FunctionNode* f = static_cast<FunctionNode*>(s);
+        if (f->name == "main") {
+            err(f->line, "'main' must be written as 'int main()'");
+            continue;
+        }
+        Symbol extra;
+        extra.isFunction = true;
+        for (size_t k = 0; k < f->params.size(); k++) extra.params.push_back(f->params[k].type);
+        Symbol *existing = NULL, *created = NULL;
+        if (!table->insert(f->name, f->retType, f->line, &existing, &created, extra)) {
+            std::ostringstream m;
+            m << "redefinition of '" << f->name << "' (first declared at line " << existing->line << ")";
+            err(f->line, m.str());
+        }
     }
 }
 
@@ -291,6 +482,8 @@ int analyze(BlockNode* program, SymbolTable& symtab) {
     errors = 0;
     loopDepth = 0;
     switchDepth = 0;
+    currentFunction = NULL;
+    declareFunctions(program);
     checkList(program);   // the program itself is the global scope (already open)
     return errors;
 }

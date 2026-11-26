@@ -21,7 +21,8 @@ extern BlockNode* g_program;
 extern int g_mainCount, g_secondMainLine, g_mainVoidLine;
 extern Node* g_mainBlock;
 
-// A C++ program must define 'int main() { ... }' and may only declare variables outside it.
+// A C++ program must define 'int main() { ... }' and may only declare variables and
+// (bonus) other functions outside it.
 static void checkProgramStructure() {
     if (g_mainCount == 0)
         reportError(PH_SYNTAX, 1, "program has no 'int main()' function: define 'int main() { ... }'");
@@ -33,8 +34,9 @@ static void checkProgramStructure() {
         Node* s = g_program->stmts[i];
         if (s == g_mainBlock) continue;
         if (s->kind == NodeKind::VarDecl || s->kind == NodeKind::DeclGroup) continue;   // global variables
+        if (s->kind == NodeKind::Function) continue;                                     // functions (bonus)
         if (s->kind == NodeKind::Block && static_cast<BlockNode*>(s)->stmts.empty()) continue;  // stray ';'
-        reportError(PH_SYNTAX, s->line, "statement outside of main(): only variable declarations are allowed at the top level");
+        reportError(PH_SYNTAX, s->line, "statement outside of main(): only declarations and functions are allowed at the top level");
     }
 }
 
@@ -44,6 +46,8 @@ static void usage() {
         "  --headers  list the #include headers found (preprocessor step)\n"
         "  --tokens   print the token stream (phase 1)\n"
         "  --ast      print the abstract syntax tree (phase 2)\n"
+        "  --dot      print the abstract syntax tree as a Graphviz graph\n"
+        "             (render it with: dot -Tpng ast.dot -o ast.png)\n"
         "  --symtab   print the symbol table (phase 3)\n"
         "  --tac      print three address code (phase 4)   [default]\n"
         "  --opt      print optimized TAC (phase 5)\n"
@@ -60,7 +64,7 @@ static void usage() {
 
 int main(int argc, char** argv) {
     bool wHeaders = false, wTokens = false, wAst = false, wSym = false, wTac = false;
-    bool wOpt = false, wAsm = false, wRun = false;
+    bool wOpt = false, wAsm = false, wRun = false, wDot = false;
     const char* file = NULL;
     const char* asmOut = NULL;
     bool allowNoHeader = false, allowNoMain = false, strict = false;
@@ -70,6 +74,7 @@ int main(int argc, char** argv) {
         if (a == "--headers") wHeaders = true;
         else if (a == "--tokens") wTokens = true;
         else if (a == "--ast") wAst = true;
+        else if (a == "--dot") wDot = true;
         else if (a == "--symtab") wSym = true;
         else if (a == "--tac") wTac = true;
         else if (a == "--opt") wOpt = true;
@@ -85,7 +90,7 @@ int main(int argc, char** argv) {
         else file = argv[i];
     }
     if (!file) { usage(); return 1; }
-    if (!(wHeaders || wTokens || wAst || wSym || wTac || wOpt || wAsm || wRun)) wTac = true;
+    if (!(wHeaders || wTokens || wAst || wSym || wTac || wOpt || wAsm || wRun || wDot)) wTac = true;
 
     yyin = fopen(file, "r");
     if (!yyin) { std::cerr << "Cannot open file '" << file << "'\n"; return 1; }
@@ -116,6 +121,10 @@ int main(int argc, char** argv) {
     }
     if (wHeaders) { std::cout << "=== Headers ===\n"; printHeaders(std::cout); }
     if (wAst) { std::cout << "=== AST ===\n"; g_program->print(std::cout, 0); }
+    if (wDot) {                       // only the graph, so the output is a valid .dot file
+        printDot(g_program, std::cout);
+        if (!(wSym || wTac || wOpt || wAsm || wRun)) return 0;
+    }
 
     // Phase 3: semantic analysis with the symbol table.
     SymbolTable table;

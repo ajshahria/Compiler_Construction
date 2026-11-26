@@ -2,6 +2,10 @@
 // Expressions return an Operand; each operator creates a fresh temporary t1, t2, ...
 // Control flow uses labels L1, L2, ... with ifFalse/goto.
 // break/continue/return/switch are translated into plain gotos to labels.
+// Bonus: a[i] reads and writes go through Load / Store with an element index; a function is
+// a 'func f: ... endfunc' block with one 'formal' per parameter, and a call is one 'param'
+// per argument followed by 'call f n'. Arguments, return values and stored elements are
+// converted to float where needed, like assignments. The functions' code comes after main.
 #include "tac.h"
 #include <iomanip>
 #include <sstream>
@@ -26,7 +30,32 @@ public:
     int tempCount, labelCount;
     std::vector<Ctx> ctx;
     std::string exitLabel;   // target of 'return', created on first use
-    Generator() : tempCount(0), labelCount(0) {}
+    FunctionNode* function;  // the function being generated (NULL: main / top level)
+    std::vector<FunctionNode*> functions;   // generated after main
+    Generator() : tempCount(0), labelCount(0), function(NULL) {}
+
+    // A call: every argument first (an argument may itself contain a call), then the params.
+    Operand call(CallNode* c, Type type, bool wantValue, const SymbolTable& table) {
+        const Symbol* f = NULL;
+        const std::vector<Symbol>& all = table.allSymbols();
+        for (size_t i = 0; i < all.size(); i++)
+            if (all[i].isFunction && all[i].name == c->name) { f = &all[i]; break; }
+        std::vector<Operand> args;
+        for (size_t i = 0; i < c->args.size(); i++) {
+            Operand a = expr(c->args[i]);
+            if (f && i < f->params.size() && f->params[i] == TY_FLOAT) a = toFloat(a);
+            args.push_back(a);
+        }
+        for (size_t i = 0; i < args.size(); i++) {
+            Instr p; p.op = Op::Param; p.a = args[i]; p.ty = args[i].ty; emit(p);
+        }
+        Instr in; in.op = Op::Call; in.label = c->name; in.argc = (int)args.size(); in.ty = type;
+        Operand result;
+        if (wantValue) { result = newTemp(type); in.result = result; }
+        emit(in);
+        return result;
+    }
+    const SymbolTable* symbols;
 
     Operand newTemp(Type t) {
         std::ostringstream ss; ss << "t" << ++tempCount;
@@ -75,6 +104,17 @@ public:
                 return t;
             }
             case NodeKind::Binary: return binary(static_cast<BinaryNode*>(n));
+            case NodeKind::Index: {
+                IndexNode* x = static_cast<IndexNode*>(n);
+                Operand i = expr(x->index);
+                Operand t = newTemp(x->type);
+                Instr in; in.op = Op::Load; in.result = t; in.a = Operand::var(x->uname, x->type); in.b = i;
+                in.ty = x->type;
+                emit(in);
+                return t;
+            }
+            case NodeKind::Call:
+                return call(static_cast<CallNode*>(n), n->type, true, *symbols);
             case NodeKind::Ternary: {
                 // t = cond ? a : b   ==>   ifFalse cond goto Le; t = a; goto Lend; Le: t = b; Lend:
                 TernaryNode* q = static_cast<TernaryNode*>(n);
@@ -136,6 +176,13 @@ public:
                 break;
             case NodeKind::VarDecl: {
                 VarDeclNode* d = static_cast<VarDeclNode*>(n);
+                for (size_t k = 0; k < d->initList.size(); k++) {      // int a[] = {1, 2}
+                    Operand v = expr(d->initList[k]);
+                    if (d->declType == TY_FLOAT) v = toFloat(v);
+                    Instr in; in.op = Op::Store; in.result = Operand::var(d->uname, d->declType);
+                    in.a = Operand::intc((long)k); in.b = v; in.ty = d->declType;
+                    emit(in);
+                }
                 if (d->init) {
                     Operand v = expr(d->init);
                     if (d->declType == TY_FLOAT) v = toFloat(v);
@@ -145,6 +192,15 @@ public:
             }
             case NodeKind::Assign: {
                 AssignNode* a = static_cast<AssignNode*>(n);
+                if (a->index) {             // a[i] = v
+                    Operand i = expr(a->index);
+                    Operand v = expr(a->value);
+                    if (a->type == TY_FLOAT) v = toFloat(v);
+                    Instr in; in.op = Op::Store; in.result = Operand::var(a->uname, a->type);
+                    in.a = i; in.b = v; in.ty = a->type;
+                    emit(in);
+                    break;
+                }
                 Operand v = expr(a->value);
                 if (a->type == TY_FLOAT) v = toFloat(v);
                 emitAssign(Operand::var(a->uname, a->type), v);
@@ -217,6 +273,16 @@ public:
             }
             case NodeKind::Return: {
                 ReturnNode* r = static_cast<ReturnNode*>(n);
+                if (function) {             // return from a function
+                    Instr in; in.op = Op::Return;
+                    if (r->value) {
+                        Operand v = expr(r->value);
+                        if (function->retType == TY_FLOAT) v = toFloat(v);
+                        in.a = v; in.ty = v.ty;
+                    }
+                    emit(in);
+                    break;
+                }
                 if (r->value) expr(r->value);
                 if (exitLabel.empty()) exitLabel = newLabel();
                 emitGoto(exitLabel);
@@ -290,13 +356,28 @@ public:
             case NodeKind::Cin: {
                 CinNode* c = static_cast<CinNode*>(n);
                 for (size_t k = 0; k < c->vars.size(); k++) {
+                    if (c->vars[k]->kind == NodeKind::Index) {     // cin >> a[i]
+                        IndexNode* x = static_cast<IndexNode*>(c->vars[k]);
+                        Operand idx = expr(x->index);
+                        Instr i; i.op = Op::ReadElem; i.result = Operand::var(x->uname, x->type);
+                        i.a = idx; i.ty = x->type;
+                        emit(i);
+                        continue;
+                    }
+                    IdentNode* v = static_cast<IdentNode*>(c->vars[k]);
                     Instr i; i.op = Op::Read;
-                    i.result = Operand::var(c->vars[k]->uname, c->vars[k]->type);
-                    i.ty = c->vars[k]->type;
+                    i.result = Operand::var(v->uname, v->type);
+                    i.ty = v->type;
                     emit(i);
                 }
                 break;
             }
+            case NodeKind::Call:
+                call(static_cast<CallNode*>(n), n->type, false, *symbols);
+                break;
+            case NodeKind::Function:        // generated after main (see generateTAC)
+                functions.push_back(static_cast<FunctionNode*>(n));
+                break;
             default:
                 break;
         }
@@ -307,8 +388,22 @@ public:
 
 TacProgram generateTAC(BlockNode* program, const SymbolTable& table) {
     Generator g;
+    g.symbols = &table;
     g.stmt(program);
     if (!g.exitLabel.empty()) g.emitLabel(g.exitLabel);   // 'return' jumps here
+    for (size_t k = 0; k < g.functions.size(); k++) {      // then every function
+        FunctionNode* f = g.functions[k];
+        g.function = f;
+        Instr start; start.op = Op::Func; start.label = f->name; g.emit(start);
+        for (size_t i = 0; i < f->params.size(); i++) {
+            Instr p; p.op = Op::Formal; p.result = Operand::var(f->params[i].uname, f->params[i].type);
+            p.ty = f->params[i].type;
+            g.emit(p);
+        }
+        g.list(f->body->stmts);
+        Instr end; end.op = Op::EndFunc; g.emit(end);
+    }
+    g.function = NULL;
     g.prog.vars = table.allSymbols();
     return g.prog;
 }
@@ -374,6 +469,18 @@ std::string instrStr(const Instr& i) {
         case Op::OutStr:     ss << "outs " << quoted(i.label); break;
         case Op::OutNl:      ss << "outnl"; break;
         case Op::Read:       ss << "read " << operandStr(i.result); break;
+        case Op::Load:       ss << operandStr(i.result) << " = " << operandStr(i.a) << "[" << operandStr(i.b) << "]"; break;
+        case Op::Store:      ss << operandStr(i.result) << "[" << operandStr(i.a) << "] = " << operandStr(i.b); break;
+        case Op::ReadElem:   ss << "read " << operandStr(i.result) << "[" << operandStr(i.a) << "]"; break;
+        case Op::Func:       ss << "func " << i.label << ":"; break;
+        case Op::Formal:     ss << "formal " << operandStr(i.result); break;
+        case Op::Return:     ss << "return"; if (i.a.kind != Operand::None) ss << " " << operandStr(i.a); break;
+        case Op::EndFunc:    ss << "endfunc"; break;
+        case Op::Param:      ss << "param " << operandStr(i.a); break;
+        case Op::Call:
+            if (i.result.kind != Operand::None) ss << operandStr(i.result) << " = ";
+            ss << "call " << i.label << " " << i.argc;
+            break;
         default:             ss << operandStr(i.result) << " = " << operandStr(i.a) << " "
                                 << opSym(i.op) << " " << operandStr(i.b); break;
     }
@@ -382,7 +489,7 @@ std::string instrStr(const Instr& i) {
 
 void printTAC(const TacProgram& p, std::ostream& os) {
     for (size_t k = 0; k < p.code.size(); k++) {
-        if (p.code[k].op == Op::Label) os << instrStr(p.code[k]) << "\n";
+        if (p.code[k].op == Op::Label || p.code[k].op == Op::Func) os << instrStr(p.code[k]) << "\n";
         else os << "    " << instrStr(p.code[k]) << "\n";
     }
 }

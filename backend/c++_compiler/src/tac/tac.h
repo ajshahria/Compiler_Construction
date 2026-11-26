@@ -23,7 +23,17 @@ enum class Op {
     Out,           // out a          (cout << a, no newline)
     OutStr,        // outs "text"    (cout << "text"; text kept in 'label')
     OutNl,         // outnl          (cout << endl)
-    Read           // read x         (cin >> x)
+    Read,          // read x         (cin >> x)
+    // bonus: arrays (the index counts elements) and functions
+    Load,          // result = a[b]  (result: array element type; a: the array)
+    Store,         // result[a] = b  (result: the array)
+    ReadElem,      // read result[a] (cin >> a[i])
+    Func,          // func f:        (label = f) start of a function: skipped when reached
+    Formal,        // formal x       the next argument of the call goes into x
+    Return,        // return a       (a may be None) leave the function
+    EndFunc,       // endfunc        end of the function (returns without a value)
+    Param,         // param a        pass an argument
+    Call           // result = call f n   (result may be None; label = f, argc = n)
 };
 
 struct Operand {
@@ -46,8 +56,9 @@ struct Instr {
     Op op;
     Operand result, a, b;
     Type ty;               // type the operation works on (operand type after conversion)
-    std::string label;     // Label / Goto / IfFalse target
-    Instr() : op(Op::Assign), ty(TY_INT) {}
+    std::string label;     // Label / Goto / IfFalse target; Func / Call: the function
+    int argc;              // Call: number of arguments
+    Instr() : op(Op::Assign), ty(TY_INT), argc(0) {}
 };
 
 struct TacProgram {

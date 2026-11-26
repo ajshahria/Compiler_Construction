@@ -1,0 +1,13 @@
+// flags: --asm
+// Bonus: a recursive function and an array in x86 assembly. The callee saves
+// its own locals on the stack, so each call of sum has its own n.
+int v[3] = {4, 5, 6};
+
+int sum(int n) {
+    if (n == 0) {
+        return 0;
+    }
+    return v[n - 1] + sum(n - 1);
+}
+
+print sum(3);

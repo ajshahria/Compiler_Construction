@@ -133,6 +133,8 @@ WS      [ \t]
 "case"                      { return CASE; }
 "default"                   { return DEFAULT; }
 "break"                     { return BREAK; }
+"continue"                  { return CONTINUE; }    /* bonus */
+"return"                    { return RETURN; }      /* methods (bonus) */
 "print"                     { return PRINT; }      /* manual: print x;              */
 "System.out.println"        { return PRINTLN; }    /* Java:   System.out.println(x); */
 
@@ -143,6 +145,12 @@ WS      [ \t]
 {ID}"."("nextInt"|"nextFloat"|"nextDouble"|"nextBoolean")  {
                               yylval.str = copyText(yytext);   /* e.g. "sc.nextInt" */
                               return SCANNER_READ;
+                            }
+{ID}".length"               {
+                              /* arrays (bonus): a.length is the number of elements */
+                              yylval.str = copyText(yytext);
+                              yylval.str[yyleng - 7] = '\0';   /* keep only the array name */
+                              return LENGTH;
                             }
 {ID}"."{ID}                 {
                               /* any other method call: reported, then passed on as a
@@ -180,7 +188,7 @@ WS      [ \t]
 {ID}                        { yylval.str = copyText(yytext); return IDENT; }
 
  /* ----- single-character operators and delimiters ----- */
-[-+*/%<>=!(){}\[\];:]       { return yytext[0]; }
+[-+*/%<>=!(){}\[\];:,]      { return yytext[0]; }   /* ',' separates arguments (bonus) */
 
  /* ----- anything else is an invalid token ----- */
 .                           { lexicalError("invalid character", yytext); }
