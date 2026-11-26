@@ -10,7 +10,11 @@
  *
  * Both `print x;` and `System.out.println(x);` print a value, and both
  * `bool` and `boolean` name the boolean type. for, do-while, switch and ++/--
- * are bonus features (manual section 14).
+ * are bonus features (manual section 14), and so are continue, arrays
+ * (int[] a = new int[5]; int[] b = {1, 2}; a[i], a.length) and static
+ * methods with parameters, return values and calls. A class holds main and
+ * any number of `static` methods; in the bare form, methods may be written
+ * among the statements.
  *
  * Operator precedence and associativity are declared below (lowest first), so
  * the expression grammar has no conflicts. The dangling else binds to the
@@ -29,6 +33,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <vector>
 
 extern int yylex();
 void yyerror(const char* message);
@@ -48,6 +53,40 @@ static Node* withSlots(const char* kind, int line, Node* a, Node* b, Node* c, No
     Node* n = makeNode(kind, "", line);
     n->children = {a, b, c, d};
     return n;
+}
+
+/* Builds a method node: method(name) -> params, body. Takes ownership of name. */
+static Node* method(const char* returnType, char* name, Node* params, Node* body, int line) {
+    Node* n = makeNode("method", name, line, params, body);
+    n->type = returnType;
+    std::free(name);
+    return n;
+}
+
+/* class Name { members }: program -> main body, then the other methods. */
+static Node* classProgram(char* name, Node* members, int line) {
+    Node* mainBody = nullptr;
+    std::vector<Node*> methods;
+    for (Node* m : members->children) {
+        if (m->kind == "main" && mainBody) {
+            std::fprintf(stderr, "line %d: syntax error: class %s has more than one main method\n", m->line, name);
+            ++syntaxErrors;
+        } else if (m->kind == "main") {
+            mainBody = m->children.at(0);
+        } else {
+            methods.push_back(m);
+        }
+    }
+    if (!mainBody) {
+        std::fprintf(stderr, "line %d: syntax error: class %s has no "
+                     "'public static void main(String[] args)' method\n", line, name);
+        ++syntaxErrors;
+        mainBody = makeNode("block", "", line);
+    }
+    Node* program = makeNode("program", name, line, mainBody);
+    for (Node* m : methods) program->children.push_back(m);
+    std::free(name);
+    return program;
 }
 
 /* Builds a declaration: decl(type) -> id [, initializer]. Takes ownership of name. */
@@ -75,10 +114,14 @@ static Node* declaration(const char* type, char* name, Node* init, int line) {
 %token IF ELSE WHILE FOR DO SWITCH CASE DEFAULT BREAK PRINT PRINTLN
 %token TRUE FALSE
 %token EQ NE LE GE AND OR INC DEC
+%token CONTINUE RETURN             /* bonus */
+%token <str> LENGTH                /* a.length (the text is the array name) */
 
-%type <type> type
+%type <type> type result_type
 %type <node> block statements statement expression
 %type <node> for_init for_update optional_expression switch_cases case_clause
+%type <node> class_members class_member method_definition parameters parameter_list
+%type <node> arguments argument_list
 
 /* Precedence, lowest to highest. */
 %left OR
@@ -107,8 +150,59 @@ program
             }
             syntaxRoot = makeNode("program", "", 1, $1);
         }
-    | CLASS IDENT '{' PUBLIC STATIC VOID MAIN '(' STRING '[' ']' IDENT ')' block '}'
-        { syntaxRoot = makeNode("program", $2, @1.first_line, $14); std::free($2); std::free($12); }
+    | CLASS IDENT '{' class_members '}'
+        { syntaxRoot = classProgram($2, $4, @1.first_line); delete $4; }
+    | PUBLIC CLASS IDENT '{' class_members '}'
+        { syntaxRoot = classProgram($3, $5, @1.first_line); delete $5; }
+    ;
+
+class_members
+    : /* empty */                            { $$ = makeNode("members", "", yylloc.first_line); }
+    | class_members class_member             { $$ = append($1, $2); }
+    ;
+
+class_member
+    : modifiers VOID MAIN '(' STRING '[' ']' IDENT ')' block
+                                             { $$ = makeNode("main", "", @3.first_line, $10); std::free($8); }
+    | method_definition                      { $$ = $1; }
+    ;
+
+/* public static / static (bonus: methods other than main) */
+modifiers
+    : STATIC
+    | PUBLIC STATIC
+    ;
+
+method_definition
+    : modifiers result_type IDENT '(' parameters ')' block
+                                             { $$ = method($2, $3, $5, $7, @3.first_line); }
+    ;
+
+result_type
+    : type                                   { $$ = $1; }
+    | VOID                                   { $$ = "void"; }
+    ;
+
+parameters
+    : /* empty */                            { $$ = makeNode("params", "", yylloc.first_line); }
+    | parameter_list                         { $$ = $1; }
+    ;
+
+parameter_list
+    : type IDENT                             { $$ = makeNode("params", "", @1.first_line, declaration($1, $2, nullptr, @2.first_line)); $$->children[0]->kind = "param"; }
+    | parameter_list ',' type IDENT          { Node* p = declaration($3, $4, nullptr, @4.first_line); p->kind = "param"; $$ = append($1, p); }
+    | type '[' ']' IDENT                     { $$ = makeNode("params", "", @1.first_line, declaration((std::string($1) + "[]").c_str(), $4, nullptr, @4.first_line)); $$->children[0]->kind = "param"; }
+    | parameter_list ',' type '[' ']' IDENT  { Node* p = declaration((std::string($3) + "[]").c_str(), $6, nullptr, @6.first_line); p->kind = "param"; $$ = append($1, p); }
+    ;
+
+arguments
+    : /* empty */                            { $$ = makeNode("args", "", yylloc.first_line); }
+    | argument_list                          { $$ = $1; }
+    ;
+
+argument_list
+    : expression                             { $$ = makeNode("args", "", @1.first_line, $1); }
+    | argument_list ',' expression           { $$ = append($1, $3); }
     ;
 
 block
@@ -132,6 +226,32 @@ statement
     | IDENT '=' expression ';'               { $$ = makeNode("assign", $1, @1.first_line, $3); std::free($1); }
     | IDENT INC ';'                          { $$ = makeNode("inc", $1, @1.first_line); std::free($1); }
     | IDENT DEC ';'                          { $$ = makeNode("dec", $1, @1.first_line); std::free($1); }
+    /* ----- arrays (bonus) ----- */
+    | type '[' ']' IDENT '=' NEW type '[' expression ']' ';'
+        {
+            $$ = makeNode("array_decl", $1, @4.first_line, makeNode("id", $4, @4.first_line),
+                          makeNode("new_array", $7, @6.first_line, $9));
+            std::free($4);
+        }
+    | type '[' ']' IDENT '=' '{' argument_list '}' ';'
+        {
+            $7->kind = "array_init";
+            $$ = makeNode("array_decl", $1, @4.first_line, makeNode("id", $4, @4.first_line), $7);
+            std::free($4);
+        }
+    | IDENT '[' expression ']' '=' expression ';'
+                                             { $$ = makeNode("assign_index", $1, @1.first_line, $3, $6); std::free($1); }
+    | IDENT '[' expression ']' INC ';'       { $$ = makeNode("inc", $1, @1.first_line, $3); std::free($1); }
+    | IDENT '[' expression ']' DEC ';'       { $$ = makeNode("dec", $1, @1.first_line, $3); std::free($1); }
+    /* ----- methods (bonus) ----- */
+    | STATIC result_type IDENT '(' parameters ')' block      /* bare form: static int f(...) { ... } */
+                                             { $$ = method($2, $3, $5, $7, @3.first_line); }
+    | IDENT '(' arguments ')' ';'
+        { Node* call = makeNode("call", $1, @1.first_line); call->children = $3->children; delete $3;
+          $$ = makeNode("call_stmt", "", @1.first_line, call); std::free($1); }
+    | RETURN expression ';'                  { $$ = makeNode("return", "", @1.first_line, $2); }
+    | RETURN ';'                             { $$ = makeNode("return", "", @1.first_line); }
+    | CONTINUE ';'                           { $$ = makeNode("continue", "", @1.first_line); }
     | PRINT expression ';'                   { $$ = makeNode("print", "", @1.first_line, $2); }
     | PRINTLN '(' expression ')' ';'         { $$ = makeNode("print", "", @1.first_line, $3); }
     | SCANNER IDENT '=' NEW SCANNER '(' SYSTEM_IN ')' ';'
@@ -190,6 +310,10 @@ expression
     | FALSE                                  { $$ = makeNode("literal", "false", @1.first_line); }
     | IDENT                                  { $$ = makeNode("id", $1, @1.first_line); std::free($1); }
     | SCANNER_READ '(' ')'                   { $$ = makeNode("read", $1, @1.first_line); std::free($1); }
+    | IDENT '[' expression ']'               { $$ = makeNode("index", $1, @1.first_line, $3); std::free($1); }
+    | LENGTH                                 { $$ = makeNode("length", $1, @1.first_line); std::free($1); }
+    | IDENT '(' arguments ')'
+        { $$ = makeNode("call", $1, @1.first_line); $$->children = $3->children; delete $3; std::free($1); }
     | '(' expression ')'                     { $$ = $2; }
     | '-' expression %prec UMINUS            { $$ = makeNode("unary", "-", @1.first_line, $2); }
     | '!' expression                         { $$ = makeNode("unary", "!", @1.first_line, $2); }

@@ -24,6 +24,18 @@
  *   case       -               literal, block
  *   default    -               block
  *   break      -               -
+ *   continue   -               -                              (bonus)
+ *   array_decl element type    id, new_array(size literal) or array_init(values)  (bonus)
+ *   index      array name      index                 a[i]     (bonus)
+ *   assign_index array name    index, value          a[i] = v (bonus)
+ *   length     array name      -                     a.length (bonus)
+ *   method     name            params, body    (type: return type)          (bonus)
+ *   params     -               param ...
+ *   param      type            id
+ *   call       method name     arguments             f(a, b)  (bonus)
+ *   call_stmt  -               call                  f(a);    (bonus)
+ *   return     -               [value]                        (bonus)
+ *   inc / dec  variable name   [index]   (an index for a[i]++)
  *   binary     operator        left, right
  *   unary      operator        operand
  *   literal    value           -
@@ -41,6 +53,7 @@ struct Node {
     int line = 1;
     std::vector<Node*> children;
     std::string tacName;   // for id/decl/assign/inc/dec: unique name chosen by the semantic analyzer
+    std::string type;      // method: return type (int, float, boolean or void)
 };
 
 Node* makeNode(const char* kind, const char* text, int line,
@@ -49,3 +62,6 @@ void freeTree(Node* node);
 
 /* Prints the tree with indentation (the --ast option). */
 void printAst(Node* node, std::ostream& out, int depth = 0);
+
+/* Prints the tree as a Graphviz digraph (the --dot option, bonus). */
+void printDot(Node* root, std::ostream& out);

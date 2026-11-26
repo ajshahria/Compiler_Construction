@@ -18,6 +18,16 @@ int analyze(Node* root);
  * (the --symtab option). Valid after analyze(). */
 std::string symbolTableReport();
 
-/* Every declared variable as (TAC name, type), for the back end.
- * Valid after analyze(). */
-std::vector<std::pair<std::string, Type>> declaredVariables();
+/* Every declared name, for the back end: the TAC name, the type (a
+ * method's return type), the number of elements of an array, whether it is
+ * a method, and the method whose local it is (empty for main's variables). */
+struct DeclaredName {
+    std::string tacName;
+    Type type;
+    int length;
+    bool isFunction;
+    std::string function;
+};
+
+/* Valid after analyze(). */
+std::vector<DeclaredName> declaredVariables();

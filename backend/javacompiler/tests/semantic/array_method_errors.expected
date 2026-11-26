@@ -1,0 +1,20 @@
+exit 1
+line 11: semantic error: missing return statement in method 'noReturn'
+line 18: semantic error: type mismatch: method 'wrong' returns boolean, got an int value
+line 21: semantic error: array parameter 'values' is not supported (pass the elements one by one)
+line 27: semantic error: type mismatch: cannot initialize int[] array 'b' with a new float[] array
+line 29: semantic error: array size of 'c' must be an integer literal (for example new int[10])
+line 30: semantic error: type mismatch: value 2 in the initializer of float[] array 'd' is a boolean value
+line 31: semantic error: type mismatch: index of array 'a' must be an int, got float
+line 32: semantic error: invalid expression: array 'a' used without an index (write a[i])
+line 33: semantic error: invalid assignment: cannot assign to the whole array 'a' (assign a[i])
+line 34: semantic error: invalid expression: 'n' is not an array
+line 35: semantic error: method 'twice' takes 1 argument(s) but 2 were given
+line 36: semantic error: type mismatch: argument 1 of 'twice' must be an int, got a boolean value
+line 37: semantic error: invalid expression: void method 'show' does not return a value
+line 38: semantic error: undeclared method 'missing'
+line 39: semantic error: invalid expression: 'n' is not a method and cannot be called
+line 40: semantic error: invalid expression: method 'twice' used without a call (write twice(...))
+line 42: semantic error: continue is only valid inside a loop
+line 43: semantic error: main is void: 'return' cannot return a value
+Compilation failed: 18 semantic error(s).

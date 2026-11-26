@@ -94,3 +94,33 @@ Anything else is a lexical error: an invalid character, a digit followed by lett
 ```
 
 After a syntax error the parser discards tokens up to the next `;` or `}` and continues parsing.
+
+## Arrays, methods and continue (bonus, manual section 14)
+
+These productions extend the grammar above (`src/parser/parser.y`):
+
+```bnf
+<program>      ::= ... | "class" IDENT "{" <members> "}" | "public" "class" IDENT "{" <members> "}"
+<members>      ::= ε | <members> <member>
+<member>       ::= <modifiers> "void" "main" "(" "String" "[" "]" IDENT ")" <block>
+                 | <modifiers> <result_type> IDENT "(" <parameters> ")" <block>
+<modifiers>    ::= "static" | "public" "static"
+<result_type>  ::= <type> | "void"
+<parameters>   ::= ε | <param_list>
+<param_list>   ::= <type> IDENT | <param_list> "," <type> IDENT
+<statement>    ::= ...
+                 | <type> "[" "]" IDENT "=" "new" <type> "[" <expr> "]" ";"
+                 | <type> "[" "]" IDENT "=" "{" <arg_list> "}" ";"
+                 | IDENT "[" <expr> "]" "=" <expr> ";"
+                 | IDENT "[" <expr> "]" "++" ";"  |  IDENT "[" <expr> "]" "--" ";"
+                 | "static" <result_type> IDENT "(" <parameters> ")" <block>   (bare form)
+                 | IDENT "(" <arguments> ")" ";"
+                 | "return" <expr> ";"  |  "return" ";"  |  "continue" ";"
+<arguments>    ::= ε | <arg_list>
+<arg_list>     ::= <expr> | <arg_list> "," <expr>
+<primary>      ::= ... | IDENT "[" <expr> "]" | IDENT ".length" | IDENT "(" <arguments> ")"
+```
+
+A class must contain exactly one `main`; the other members are static methods. The size
+in `new int[n]` must be an integer literal (checked by the semantic analyzer). The grammar
+has no conflicts.

@@ -1,0 +1,3 @@
+exit 1
+line 2: syntax error: class NoMain has no 'public static void main(String[] args)' method
+Compilation failed: 0 lexical error(s), 1 syntax error(s).

@@ -23,10 +23,12 @@ source file
 
 | Feature | Example | Notes |
 |---|---|---|
-| Class wrapper | `class Main { public static void main(String[] args) { ... } }` | `--strict` makes the wrapper compulsory. |
+| Class wrapper | `class Main { public static void main(String[] args) { ... } }` (or `public class`) | `--strict` makes the wrapper compulsory. |
+| Methods | `static int add(int a, int b) { return a + b; }`, `static void show(float v) { ... }` | In the class next to `main`, or among the statements in the bare form. Recursion works. A method sees its parameters and its own variables (Java has no global variables). Each argument must fit its parameter; a non-void method must end with a `return` ("missing return statement"). Array parameters are not supported. |
+| Arrays | `int[] a = new int[5];`, `int[] b = {1, 2, 3};`, `a[i] = 3;`, `a[i]++`, `a.length`, `a[i] = sc.nextInt();` | One dimension; the size in `new int[n]` must be an integer literal. `--run` reports an index out of bounds. |
 | Types | `int`, `float`, `boolean` (`bool` also works) | An `int` value may be stored in a `float` variable; every other mix is an error. |
 | Output | `System.out.println(x);` | `print x;` also works. |
-| Loops and branches | `for`, `do-while`, `switch` / `case` / `default`, `break` | `break` is only allowed inside a loop or `switch`. |
+| Loops and branches | `for`, `do-while`, `switch` / `case` / `default`, `break`, `continue` | `break` is only allowed inside a loop or `switch`, `continue` inside a loop. |
 | Operators | `i++`, `i--` | |
 | Imports | `import java.util.Scanner;`, `import java.util.*;`, `import static java.lang.Math.max;` | Only standard `java.*` and `javax.*` packages. An import must come before the class. `--headers` lists them. |
 | Input | `Scanner sc = new Scanner(System.in);` then `int n = sc.nextInt();` | Needs `import java.util.Scanner;` (or `java.util.*`). `nextInt`, `nextFloat`, `nextDouble` (read as a `float`) and `nextBoolean`. A read must be the whole right side of `=`, and its type must match the variable. |
@@ -67,6 +69,7 @@ echo "3 2.5" | ./build/minijavac --run Program.java       # with input for a Sca
 | `--headers` | the `import` lines, with their line and package |
 | `--tokens` | the token stream: line, token category, lexeme |
 | `--ast` | the Abstract Syntax Tree, indented |
+| `--dot` | the Abstract Syntax Tree as a Graphviz graph (bonus): `build/minijavac --dot Prog.java > ast.dot`, then `dot -Tpng ast.dot -o ast.png` |
 | `--symtab` | the symbol table after semantic analysis |
 | `--tac` | Three Address Code (the default) |
 | `--opt` | optimized TAC (bonus) |
@@ -170,10 +173,28 @@ javacompiler/
 └── tests/                         see Tests below
 ```
 
+## Arrays and functions in the TAC (bonus)
+
+An array element is read with `t1 = a[i]` and written with `a[i] = t1`; the index counts
+elements. A function is a `func f:` ... `endfunc` block: each parameter is taken with
+`formal x`, and `return t1` leaves it. A call passes each argument with `param`, then calls:
+
+```text
+func square:            param 4
+formal x                t2 = call square 1
+t1 = x * x              print t2
+return t1
+endfunc
+```
+
+A `func` block is skipped when execution reaches it; its code only runs through a call.
+A call saves the called function's own variables, so recursion works with `--run` and in
+the `--asm` output.
+
 ## Tests
 
 ```sh
-make test                          # build, then run all 38 tests
+make test                          # build, then run all 43 tests
 sh tests/run_tests.sh --update     # rewrite the .expected files after an intended change
 ```
 
@@ -181,9 +202,9 @@ Each `tests/<category>/<name>.java` is paired with `<name>.expected`. Its first 
 
 | Folder | Count | Programs |
 |---|---|---|
-| `valid/` | 19 | asm_small, do_while, for_loop, imports, java_wrapper, manual_bare_sample, manual_sample, manual_tac_example, nested_scopes, opt_constant_folding, run_division_by_zero, run_manual_bare_sample, run_scanner, run_scanner_no_input, run_stress, scanner_tac, smoke, sum_three, switch_case |
+| `valid/` | 22 | asm_small, bare_methods, do_while, dot_ast, for_loop, imports, java_wrapper, manual_bare_sample, manual_sample, manual_tac_example, nested_scopes, opt_constant_folding, run_arrays_methods, run_division_by_zero, run_manual_bare_sample, run_scanner, run_scanner_no_input, run_stress, scanner_tac, smoke, sum_three, switch_case |
 | `lexical/` | 5 | bad_character, bad_import, invalid_identifier, scanner_method, unterminated_comment |
-| `syntax/` | 4 | missing_class, missing_parenthesis, missing_semicolon, multiple_errors |
-| `semantic/` | 10 | break_outside_loop, invalid_assignment, invalid_expression, non_boolean_condition, redeclaration, scanner_errors, scope_violation, type_mismatch, undeclared, uninitialized |
+| `syntax/` | 5 | missing_class, missing_main, missing_parenthesis, missing_semicolon, multiple_errors |
+| `semantic/` | 11 | array_method_errors, break_outside_loop, invalid_assignment, invalid_expression, non_boolean_condition, redeclaration, scanner_errors, scope_violation, type_mismatch, undeclared, uninitialized |
 
-Current result: **38 passed, 0 failed**.
+Current result: **43 passed, 0 failed**.

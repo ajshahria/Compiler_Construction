@@ -25,6 +25,9 @@ struct SymbolInfo {
     int scopeId;            // unique id of the declaring scope (0 = global)
     std::string tacName;    // name used in the TAC (see semantic.cpp)
     bool initialized;
+    int length = 0;                  // arrays (bonus): number of elements
+    bool isFunction = false;         // methods (bonus)
+    std::vector<Type> params;        // methods: parameter types
 };
 
 class SymbolTable {
