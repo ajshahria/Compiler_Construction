@@ -32,7 +32,7 @@ extern int lexer_errors;         /* counted by the lexer  */
 extern int parser_errors;        /* counted by the parser */
 extern void print_headers(FILE *out);   /* lexer.l: table of the #include headers */
 
-typedef enum { MODE_HEADERS, MODE_TOKENS, MODE_AST, MODE_SYMTAB, MODE_TAC, MODE_OPT, MODE_ASM, MODE_RUN, MODE_ALL } Mode;
+typedef enum { MODE_HEADERS, MODE_TOKENS, MODE_AST, MODE_DOT, MODE_SYMTAB, MODE_TAC, MODE_OPT, MODE_ASM, MODE_RUN, MODE_ALL } Mode;
 
 static void usage(const char *program)
 {
@@ -42,6 +42,8 @@ static void usage(const char *program)
         "  --headers  list the #include headers found (preprocessor step)\n"
         "  --tokens  print the token stream (lexical analysis)\n"
         "  --ast      print the abstract syntax tree\n"
+        "  --dot      print the abstract syntax tree as a Graphviz graph\n"
+        "             (render it with: dot -Tpng ast.dot -o ast.png)\n"
         "  --symtab   print the symbol table after semantic analysis\n"
         "  --tac      print three address code (default)\n"
         "  --opt      print optimized three address code\n"
@@ -70,6 +72,17 @@ static const char *token_name(int token)
     case IF:    return "KEYWORD_IF";
     case ELSE:  return "KEYWORD_ELSE";
     case WHILE: return "KEYWORD_WHILE";
+    case FOR:      return "KEYWORD_FOR";
+    case DO:       return "KEYWORD_DO";
+    case SWITCH:   return "KEYWORD_SWITCH";
+    case CASE:     return "KEYWORD_CASE";
+    case DEFAULT:  return "KEYWORD_DEFAULT";
+    case BREAK:    return "KEYWORD_BREAK";
+    case CONTINUE: return "KEYWORD_CONTINUE";
+    case INC: case DEC:
+        return "INCDEC_OP";
+    case ADD_ASSIGN: case SUB_ASSIGN: case MUL_ASSIGN: case DIV_ASSIGN: case MOD_ASSIGN:
+        return "COMPOUND_ASSIGN";
     case PRINT: return "KEYWORD_PRINT";
     case TRUE:  return "BOOL_LITERAL";
     case FALSE: return "BOOL_LITERAL";
@@ -84,7 +97,8 @@ static const char *token_name(int token)
     case '!':                                         return "LOGICAL_OP";
     case '=':                                         return "ASSIGN";
     case '&':                                         return "ADDRESS_OP";
-    case '(': case ')': case '{': case '}': case ';': case ',': return "DELIMITER";
+    case '(': case ')': case '{': case '}': case ';': case ',':
+    case '[': case ']': case ':':                     return "DELIMITER";
     }
     snprintf(single, sizeof single, "'%c'", token);
     return single;
@@ -122,6 +136,9 @@ static int back_end(const char *tac, SymbolTable *table, Mode mode, FILE *out)
     for (Symbol *s = table->first_declared; s != NULL; s = s->next_declared, k++) {
         vars[k].name = s->tac_name;
         vars[k].type = s->type == TYPE_FLOAT ? TAC_FLOAT : s->type == TYPE_BOOL ? TAC_BOOL : TAC_INT;
+        vars[k].length = (int)s->length;
+        vars[k].is_function = s->is_function;
+        vars[k].function = s->function;
     }
     char error[256];
     TacProgram *program = tac_build(tac, vars, count, error, sizeof error);
@@ -143,7 +160,13 @@ static int back_end(const char *tac, SymbolTable *table, Mode mode, FILE *out)
     if (mode == MODE_ASM || mode == MODE_ALL) {
         if (mode == MODE_ALL)
             heading(out, "X86 ASSEMBLY");
-        char *text = tac_assembly(program, "the Tricora C compiler");
+        char *text = tac_assembly(program, "the Tricora C compiler", error, sizeof error);
+        if (text == NULL) {
+            fflush(out);
+            fprintf(stderr, "%s\n", error);
+            tac_free(program);
+            return 1;
+        }
         fputs(text, out);
         free(text);
     }
@@ -174,6 +197,7 @@ int main(int argc, char **argv)
         if (strcmp(argv[i], "--headers") == 0)     mode = MODE_HEADERS;
         else if (strcmp(argv[i], "--tokens") == 0) mode = MODE_TOKENS;
         else if (strcmp(argv[i], "--ast") == 0)    mode = MODE_AST;
+        else if (strcmp(argv[i], "--dot") == 0)    mode = MODE_DOT;
         else if (strcmp(argv[i], "--symtab") == 0) mode = MODE_SYMTAB;
         else if (strcmp(argv[i], "--tac") == 0 || strcmp(argv[i], "--ir") == 0) mode = MODE_TAC;
         else if (strcmp(argv[i], "--opt") == 0)    mode = MODE_OPT;
@@ -262,6 +286,11 @@ int main(int argc, char **argv)
         ast_print_program(program_root, out);
         if (mode == MODE_AST)
             return 0;
+    }
+
+    if (mode == MODE_DOT) {
+        ast_print_dot(program_root, out);
+        return 0;
     }
 
     /* ---- Phase 3: semantic analysis with the symbol table ---- */

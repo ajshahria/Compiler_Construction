@@ -3,8 +3,10 @@
  */
 #include "ast.h"
 
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 /* calloc that stops the compiler cleanly if memory runs out. */
 static void *allocate(size_t size)
@@ -73,6 +75,22 @@ Expr *ast_unary(Operator op, Expr *operand, int line)
     return e;
 }
 
+Expr *ast_index(char *name, Expr *index, int line)
+{
+    Expr *e = new_expr(EX_INDEX, line);
+    e->as.index.name = name;
+    e->as.index.index = index;
+    return e;
+}
+
+Expr *ast_call(char *name, ExprList *args, int line)
+{
+    Expr *e = new_expr(EX_CALL, line);
+    e->as.call.name = name;
+    e->as.call.args = args ? args : ast_expr_list_new();
+    return e;
+}
+
 /* ---------- statement constructors ---------- */
 
 static Stmt *new_stmt(StmtKind kind, int line)
@@ -97,6 +115,79 @@ Stmt *ast_assign(char *name, Expr *value, int line)
     Stmt *s = new_stmt(ST_ASSIGN, line);
     s->as.assign.name = name;
     s->as.assign.value = value;
+    s->as.assign.op = -1;
+    return s;
+}
+
+Stmt *ast_array_decl(Type type, char *name, long length, ExprList *init_list, int line)
+{
+    Stmt *s = ast_decl(type, name, NULL, line);
+    /* int a[] = {1, 2, 3}: the length is the number of values */
+    s->as.decl.length = length > 0 ? length : (init_list ? (long)init_list->count : 0);
+    s->as.decl.init_list = init_list;
+    if (s->as.decl.length <= 0)
+        s->as.decl.length = -1;            /* reported by the semantic analyzer */
+    return s;
+}
+
+Stmt *ast_assign_to(Expr *target, int op, Expr *value, int line)
+{
+    char *name = target->kind == EX_INDEX ? target->as.index.name : target->as.name;
+    Stmt *s = ast_assign(name, value, line);
+    s->as.assign.index = target->kind == EX_INDEX ? target->as.index.index : NULL;
+    s->as.assign.op = op;
+    return s;
+}
+
+/* x++ and ++x are the statement x += 1 (likewise x-- and --x). */
+Stmt *ast_incdec(Expr *target, int increment, int line)
+{
+    Stmt *s = ast_assign_to(target, increment ? OP_ADD : OP_SUB, ast_int(1, line), line);
+    s->as.assign.incdec = increment ? "++" : "--";
+    return s;
+}
+
+Stmt *ast_for(Stmt *init, Expr *cond, Stmt *update, Stmt *body, int line)
+{
+    Stmt *s = new_stmt(ST_FOR, line);
+    s->as.for_stmt.init = init;
+    s->as.for_stmt.cond = cond;
+    s->as.for_stmt.update = update;
+    s->as.for_stmt.body = body;
+    return s;
+}
+
+Stmt *ast_do_while(Stmt *body, Expr *cond, int line)
+{
+    Stmt *s = new_stmt(ST_DO_WHILE, line);
+    s->as.while_stmt.cond = cond;
+    s->as.while_stmt.body = body;
+    return s;
+}
+
+Stmt *ast_switch(Expr *value, StmtList *body, int line)
+{
+    Stmt *s = new_stmt(ST_SWITCH, line);
+    s->as.switch_stmt.value = value;
+    s->as.switch_stmt.body = body;
+    return s;
+}
+
+Stmt *ast_case(long value, int is_default, int line)
+{
+    Stmt *s = new_stmt(ST_CASE, line);
+    s->as.case_label.value = value;
+    s->as.case_label.is_default = is_default;
+    return s;
+}
+
+Stmt *ast_break(int line)    { return new_stmt(ST_BREAK, line); }
+Stmt *ast_continue(int line) { return new_stmt(ST_CONTINUE, line); }
+
+Stmt *ast_call_stmt(Expr *call, int line)
+{
+    Stmt *s = new_stmt(ST_CALL, line);
+    s->as.call = call;
     return s;
 }
 
@@ -136,11 +227,12 @@ Stmt *ast_error(int line)
     return new_stmt(ST_ERROR, line);
 }
 
-Stmt *ast_function(Type type, char *name, StmtList *body, int line)
+Stmt *ast_function(Type type, char *name, ParamList *params, StmtList *body, int line)
 {
     Stmt *s = new_stmt(ST_FUNCTION, line);
     s->as.function.type = type;
     s->as.function.name = name;
+    s->as.function.params = params ? params : ast_param_list_new();
     s->as.function.body = body;
     return s;
 }
@@ -186,6 +278,31 @@ ExprList *ast_expr_list_append(ExprList *list, Expr *expr)
         }
     }
     list->items[list->count++] = expr;
+    return list;
+}
+
+ParamList *ast_param_list_new(void)
+{
+    return allocate(sizeof(ParamList));
+}
+
+ParamList *ast_param_list_append(ParamList *list, Type type, char *name, int line)
+{
+    if (list == NULL)
+        list = ast_param_list_new();
+    if (list->count == list->capacity) {
+        list->capacity = list->capacity ? list->capacity * 2 : 4;
+        list->items = realloc(list->items, list->capacity * sizeof *list->items);
+        if (list->items == NULL) {
+            perror("out of memory");
+            exit(2);
+        }
+    }
+    Param *p = &list->items[list->count++];
+    p->type = type;
+    p->name = name;
+    p->line = line;
+    p->tac_name = NULL;
     return list;
 }
 
@@ -266,6 +383,7 @@ const char *type_name(Type type)
     case TYPE_INT:   return "int";
     case TYPE_FLOAT: return "float";
     case TYPE_BOOL:  return "bool";
+    case TYPE_VOID:  return "void";
     default:         return "error";
     }
 }
@@ -292,49 +410,96 @@ const char *operator_symbol(Operator op)
     return "?";
 }
 
-/* ---------- printing (--ast) ---------- */
+/* ---------- printing (--ast and --dot) ---------- */
 
-static FILE *ast_out;   /* destination of the --ast listing */
+/* The listing goes to a FILE (--ast) or into a text buffer that --dot turns
+ * into a Graphviz graph, so both show exactly the same nodes. */
+static FILE *ast_out;
+static char *ast_buffer;
+static size_t ast_length, ast_capacity;
+
+static void put(const char *format, ...)
+{
+    va_list args;
+    if (ast_out != NULL) {
+        va_start(args, format);
+        vfprintf(ast_out, format, args);
+        va_end(args);
+        return;
+    }
+    va_start(args, format);
+    int need = vsnprintf(NULL, 0, format, args);
+    va_end(args);
+    if (ast_length + (size_t)need + 1 > ast_capacity) {
+        ast_capacity = (ast_length + (size_t)need + 1) * 2;
+        ast_buffer = realloc(ast_buffer, ast_capacity);
+        if (ast_buffer == NULL) {
+            perror("out of memory");
+            exit(2);
+        }
+    }
+    va_start(args, format);
+    vsnprintf(ast_buffer + ast_length, (size_t)need + 1, format, args);
+    va_end(args);
+    ast_length += (size_t)need;
+}
+
 static void indent(int depth)
 {
     for (int i = 0; i < depth; i++)
-        fprintf(ast_out, "  ");
+        put("  ");
 }
+
+static void print_stmt(Stmt *s, int depth);
+static void print_list(StmtList *list, int depth);
 
 static void print_expr(Expr *e, int depth)
 {
     indent(depth);
     if (e == NULL) {
-        fprintf(ast_out, "<missing>\n");
+        put("<missing>\n");
         return;
     }
     switch (e->kind) {
     case EX_INT:
-        fprintf(ast_out, "IntLiteral %ld\n", e->as.integer);
+        put("IntLiteral %ld\n", e->as.integer);
         break;
     case EX_FLOAT:
-        fprintf(ast_out, "FloatLiteral %g%s\n", e->as.real,
-                e->as.real == (long)e->as.real ? ".0" : "");
+        put("FloatLiteral %g%s\n", e->as.real, e->as.real == (long)e->as.real ? ".0" : "");
         break;
     case EX_BOOL:
-        fprintf(ast_out, "BoolLiteral %s\n", e->as.boolean ? "true" : "false");
+        put("BoolLiteral %s\n", e->as.boolean ? "true" : "false");
         break;
     case EX_NAME:
-        fprintf(ast_out, "Identifier %s\n", e->as.name);
+        put("Identifier %s\n", e->as.name);
         break;
     case EX_BINARY:
-        fprintf(ast_out, "BinaryOp %s\n", operator_symbol(e->as.binary.op));
+        put("BinaryOp %s\n", operator_symbol(e->as.binary.op));
         print_expr(e->as.binary.left, depth + 1);
         print_expr(e->as.binary.right, depth + 1);
         break;
     case EX_UNARY:
-        fprintf(ast_out, "UnaryOp %s\n", operator_symbol(e->as.unary.op));
+        put("UnaryOp %s\n", operator_symbol(e->as.unary.op));
         print_expr(e->as.unary.operand, depth + 1);
+        break;
+    case EX_INDEX:
+        put("ArrayIndex %s\n", e->as.index.name);
+        print_expr(e->as.index.index, depth + 1);
+        break;
+    case EX_CALL:
+        put("Call %s\n", e->as.call.name);
+        for (size_t i = 0; i < e->as.call.args->count; i++)
+            print_expr(e->as.call.args->items[i], depth + 1);
         break;
     }
 }
 
-static void print_list(StmtList *list, int depth);
+/* A labelled child such as "Condition" or "Body". */
+static void print_part(const char *title, int depth)
+{
+    indent(depth);
+    put("%s\n", title);
+}
 
 static void print_stmt(Stmt *s, int depth)
 {
@@ -343,67 +508,138 @@ static void print_stmt(Stmt *s, int depth)
     indent(depth);
     switch (s->kind) {
     case ST_DECL:
-        fprintf(ast_out, "VarDecl %s %s (line %d)\n", type_name(s->as.decl.type), s->as.decl.name, s->line);
+        if (s->as.decl.length != 0) {
+            put("ArrayDecl %s %s[%ld] (line %d)\n", type_name(s->as.decl.type), s->as.decl.name,
+                s->as.decl.length, s->line);
+            for (size_t i = 0; s->as.decl.init_list && i < s->as.decl.init_list->count; i++)
+                print_expr(s->as.decl.init_list->items[i], depth + 1);
+            break;
+        }
+        put("VarDecl %s %s (line %d)\n", type_name(s->as.decl.type), s->as.decl.name, s->line);
         if (s->as.decl.init)
             print_expr(s->as.decl.init, depth + 1);
         break;
     case ST_ASSIGN:
-        fprintf(ast_out, "Assign %s (line %d)\n", s->as.assign.name, s->line);
-        print_expr(s->as.assign.value, depth + 1);
+        if (s->as.assign.incdec) {
+            put("%s %s%s (line %d)\n", s->as.assign.incdec[0] == '+' ? "Increment" : "Decrement",
+                s->as.assign.name, s->as.assign.index ? "[]" : "", s->line);
+            if (s->as.assign.index)
+                print_expr(s->as.assign.index, depth + 1);
+            break;
+        }
+        if (s->as.assign.op >= 0)
+            put("CompoundAssign %s%s %s= (line %d)\n", s->as.assign.name, s->as.assign.index ? "[]" : "",
+                operator_symbol((Operator)s->as.assign.op), s->line);
+        else
+            put("Assign %s%s (line %d)\n", s->as.assign.name, s->as.assign.index ? "[]" : "", s->line);
+        if (s->as.assign.index) {
+            print_part("Index", depth + 1);
+            print_expr(s->as.assign.index, depth + 2);
+            print_part("Value", depth + 1);
+            print_expr(s->as.assign.value, depth + 2);
+        } else {
+            print_expr(s->as.assign.value, depth + 1);
+        }
         break;
     case ST_PRINT:
-        fprintf(ast_out, "Print (line %d)\n", s->line);
+        put("Print (line %d)\n", s->line);
         print_expr(s->as.print, depth + 1);
         break;
     case ST_IF:
-        fprintf(ast_out, "%s (line %d)\n", s->as.if_stmt.else_branch ? "IfElse" : "If", s->line);
-        indent(depth + 1);
-        fprintf(ast_out, "Condition\n");
+        put("%s (line %d)\n", s->as.if_stmt.else_branch ? "IfElse" : "If", s->line);
+        print_part("Condition", depth + 1);
         print_expr(s->as.if_stmt.cond, depth + 2);
-        indent(depth + 1);
-        fprintf(ast_out, "Then\n");
+        print_part("Then", depth + 1);
         print_stmt(s->as.if_stmt.then_branch, depth + 2);
         if (s->as.if_stmt.else_branch) {
-            indent(depth + 1);
-            fprintf(ast_out, "Else\n");
+            print_part("Else", depth + 1);
             print_stmt(s->as.if_stmt.else_branch, depth + 2);
         }
         break;
     case ST_WHILE:
-        fprintf(ast_out, "While (line %d)\n", s->line);
-        indent(depth + 1);
-        fprintf(ast_out, "Condition\n");
+    case ST_DO_WHILE:
+        put("%s (line %d)\n", s->kind == ST_WHILE ? "While" : "DoWhile", s->line);
+        if (s->kind == ST_DO_WHILE) {
+            print_part("Body", depth + 1);
+            print_stmt(s->as.while_stmt.body, depth + 2);
+        }
+        print_part("Condition", depth + 1);
         print_expr(s->as.while_stmt.cond, depth + 2);
-        indent(depth + 1);
-        fprintf(ast_out, "Body\n");
-        print_stmt(s->as.while_stmt.body, depth + 2);
+        if (s->kind == ST_WHILE) {
+            print_part("Body", depth + 1);
+            print_stmt(s->as.while_stmt.body, depth + 2);
+        }
+        break;
+    case ST_FOR:
+        put("For (line %d)\n", s->line);
+        if (s->as.for_stmt.init) {
+            print_part("Init", depth + 1);
+            print_stmt(s->as.for_stmt.init, depth + 2);
+        }
+        if (s->as.for_stmt.cond) {
+            print_part("Condition", depth + 1);
+            print_expr(s->as.for_stmt.cond, depth + 2);
+        }
+        if (s->as.for_stmt.update) {
+            print_part("Update", depth + 1);
+            print_stmt(s->as.for_stmt.update, depth + 2);
+        }
+        print_part("Body", depth + 1);
+        print_stmt(s->as.for_stmt.body, depth + 2);
+        break;
+    case ST_SWITCH:
+        put("Switch (line %d)\n", s->line);
+        print_part("Value", depth + 1);
+        print_expr(s->as.switch_stmt.value, depth + 2);
+        print_part("Body", depth + 1);
+        print_list(s->as.switch_stmt.body, depth + 2);
+        break;
+    case ST_CASE:
+        if (s->as.case_label.is_default)
+            put("Default (line %d)\n", s->line);
+        else
+            put("Case %ld (line %d)\n", s->as.case_label.value, s->line);
+        break;
+    case ST_BREAK:
+        put("Break (line %d)\n", s->line);
+        break;
+    case ST_CONTINUE:
+        put("Continue (line %d)\n", s->line);
+        break;
+    case ST_CALL:
+        put("CallStatement (line %d)\n", s->line);
+        print_expr(s->as.call, depth + 1);
         break;
     case ST_BLOCK:
-        fprintf(ast_out, "Block (line %d)\n", s->line);
+        put("Block (line %d)\n", s->line);
         print_list(s->as.block, depth + 1);
         break;
-    case ST_FUNCTION:
-        fprintf(ast_out, "Function %s %s() (line %d)\n", type_name(s->as.function.type),
-                s->as.function.name, s->line);
+    case ST_FUNCTION: {
+        ParamList *params = s->as.function.params;
+        put("Function %s %s(", type_name(s->as.function.type), s->as.function.name);
+        for (size_t i = 0; i < params->count; i++)
+            put("%s%s %s", i ? ", " : "", type_name(params->items[i].type), params->items[i].name);
+        put(") (line %d)\n", s->line);
         print_list(s->as.function.body, depth + 1);
         break;
+    }
     case ST_RETURN:
-        fprintf(ast_out, "Return (line %d)\n", s->line);
+        put("Return (line %d)\n", s->line);
         if (s->as.ret)
             print_expr(s->as.ret, depth + 1);
         break;
     case ST_PRINTF:
-        fprintf(ast_out, "Printf \"%s\" (line %d)\n", s->as.printf_stmt.format, s->line);
+        put("Printf \"%s\" (line %d)\n", s->as.printf_stmt.format, s->line);
         for (size_t i = 0; s->as.printf_stmt.args && i < s->as.printf_stmt.args->count; i++)
             print_expr(s->as.printf_stmt.args->items[i], depth + 1);
         break;
     case ST_SCANF:
-        fprintf(ast_out, "Scanf \"%s\" (line %d)\n", s->as.printf_stmt.format, s->line);
+        put("Scanf \"%s\" (line %d)\n", s->as.printf_stmt.format, s->line);
         for (size_t i = 0; s->as.printf_stmt.args && i < s->as.printf_stmt.args->count; i++)
             print_expr(s->as.printf_stmt.args->items[i], depth + 1);
         break;
     case ST_ERROR:
-        fprintf(ast_out, "ErrorStatement (line %d)\n", s->line);
+        put("ErrorStatement (line %d)\n", s->line);
         break;
     }
 }
@@ -417,6 +653,73 @@ static void print_list(StmtList *list, int depth)
 void ast_print_program(StmtList *program, FILE *out)
 {
     ast_out = out;
-    fprintf(ast_out, "Program\n");
+    put("Program\n");
     print_list(program, 1);
+}
+
+/* Fill colour of a node in the --dot graph, by the kind of construct. */
+static const char *dot_colour(const char *label)
+{
+    static const char *const KINDS[][2] = {
+        { "Program", "#d9d2e9" }, { "Function", "#d9d2e9" },
+        { "VarDecl", "#cfe2f3" }, { "ArrayDecl", "#cfe2f3" },
+        { "Assign", "#d9ead3" }, { "CompoundAssign", "#d9ead3" },
+        { "Increment", "#d9ead3" }, { "Decrement", "#d9ead3" },
+        { "If", "#fce5cd" }, { "IfElse", "#fce5cd" }, { "While", "#fce5cd" },
+        { "DoWhile", "#fce5cd" }, { "For", "#fce5cd" }, { "Switch", "#fce5cd" },
+        { "Case", "#fce5cd" }, { "Default", "#fce5cd" }, { "Break", "#fce5cd" },
+        { "Continue", "#fce5cd" }, { "Return", "#fce5cd" },
+        { "BinaryOp", "#fff2cc" }, { "UnaryOp", "#fff2cc" },
+        { "IntLiteral", "#ffffff" }, { "FloatLiteral", "#ffffff" }, { "BoolLiteral", "#ffffff" },
+        { "Identifier", "#ffffff" }, { "ArrayIndex", "#ffffff" }, { "Call", "#ead1dc" },
+        { "CallStatement", "#ead1dc" },
+    };
+    size_t word = strcspn(label, " (");
+    for (size_t k = 0; k < sizeof KINDS / sizeof KINDS[0]; k++)
+        if (strlen(KINDS[k][0]) == word && strncmp(label, KINDS[k][0], word) == 0)
+            return KINDS[k][1];
+    return "#f3f3f3";                       /* Condition, Body, Then, ... */
+}
+
+/* --dot: the --ast listing as a Graphviz digraph. Every line of the listing
+ * is a node; its parent is the nearest line above it indented one level
+ * less. Render with:  dot -Tpng ast.dot -o ast.png */
+void ast_print_dot(StmtList *program, FILE *out)
+{
+    ast_out = NULL;
+    ast_buffer = NULL;
+    ast_length = ast_capacity = 0;
+    put("Program\n");
+    print_list(program, 1);
+
+    fprintf(out, "digraph AST {\n");
+    fprintf(out, "    node [shape=box, style=\"rounded,filled\", fontname=\"Helvetica\", fontsize=11];\n");
+    fprintf(out, "    edge [arrowsize=0.7];\n");
+    int parents[256];               /* node number at each depth */
+    int node = 0;
+    for (char *line = ast_buffer; line != NULL && *line != '\0'; node++) {
+        char *end = strchr(line, '\n');
+        if (end != NULL)
+            *end = '\0';
+        int depth = 0;
+        while (line[depth * 2] == ' ' && line[depth * 2 + 1] == ' ')
+            depth++;
+        const char *label = line + depth * 2;
+        fprintf(out, "    n%d [label=\"", node);
+        for (const char *c = label; *c != '\0'; c++) {
+            if (*c == '"' || *c == '\\')
+                fputc('\\', out);
+            fputc(*c, out);
+        }
+        fprintf(out, "\", fillcolor=\"%s\"];\n", dot_colour(label));
+        if (depth > 255)
+            depth = 255;
+        parents[depth] = node;
+        if (depth > 0)
+            fprintf(out, "    n%d -> n%d;\n", parents[depth - 1], node);
+        line = end ? end + 1 : NULL;
+    }
+    fprintf(out, "}\n");
+    free(ast_buffer);
+    ast_buffer = NULL;
 }

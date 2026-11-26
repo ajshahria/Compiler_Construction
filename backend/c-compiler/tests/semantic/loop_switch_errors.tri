@@ -1,0 +1,26 @@
+// Bonus loops: break / continue outside a loop, a non-int switch value,
+// duplicate case values, two defaults, a case outside a switch, a non-bool
+// for condition and ++ on a bool.
+int x = 1;
+bool flag = true;
+break;
+continue;
+switch (flag) {
+case 1:
+    print 1;
+case 1:
+    print 2;
+default:
+    print 3;
+default:
+    print 4;
+}
+switch (x) {
+case 2:
+    continue;
+}
+case 5:
+for (int i = 0; i + 3; i++) {
+    print i;
+}
+flag++;

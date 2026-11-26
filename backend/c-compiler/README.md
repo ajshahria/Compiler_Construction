@@ -38,8 +38,12 @@ if (flag == true) { print y; } else { print x; }
 | Feature | Example | Notes |
 |---|---|---|
 | Headers | `#include <stdio.h>` | 13 standard headers are known. `<stdio.h>` declares `printf`/`scanf`; the others are accepted and listed by `--headers`. An unknown header or `#include "file.h"` is a lexical error. |
-| Main function | `int main() { ... }`, `int main(void)` | Only declarations may stand outside `main`. |
-| Return | `return 0;` | Only inside `main`, and the value must be an `int`. |
+| Main function | `int main() { ... }`, `int main(void)` | Only declarations and other functions may stand outside `main`. |
+| Functions | `int add(int a, int b) { return a + b; }`, `void show(float v) { ... }` | Defined at the top level; recursion works. Each argument must fit its parameter, a `void` function is not a value, and `main` cannot be called. They also work in the manual's form without `main`. |
+| Return | `return 0;`, `return a + b;` | Only inside a function, with a value of the function's type (none for `void`). |
+| Arrays | `int a[5];`, `float b[] = {1.5, 2};`, `a[i] = 3;`, `scanf("%d", &a[i]);` | One dimension, a positive size, an `int` index. An array is only used with an index; `--run` reports an index out of bounds. |
+| Loops and switch | `for (int i = 0; i < n; i++)`, `do { ... } while (c);`, `switch (x) { case 1: ... break; default: ... }`, `break`, `continue` | `for (;;)` loops until `break`. Case labels are `int` constants and fall through as in C. |
+| Increment and compound assignment | `x++`, `--x`, `a[i]++`, `x += 2`, `-=`, `*=`, `/=`, `%=` | Statements, typed like `x = x + 2`. |
 | Output | `printf("x = %d, y = %.2f\n", x, y);` | `%d %i` (int, bool), `%f %.Nf %g` (float), `%%`, and the escapes `\n \t \r \0 \\ \" \'`. Each conversion is type-checked against its argument. |
 | Input | `scanf("%d %f", &a, &b);` | `%d %i` read into an `int` or `bool`, `%f %g` into a `float`. Only conversions and spaces may appear in the format. |
 
@@ -77,6 +81,7 @@ echo "3 2.5" | ./build/tricora --run program.c                # with input for s
 | `--headers` | the `#include` headers, with their line, category and role |
 | `--tokens` | the token stream: line, token type, lexeme |
 | `--ast` | the Abstract Syntax Tree, indented |
+| `--dot` | the Abstract Syntax Tree as a Graphviz graph (bonus): `build/tricora --dot prog.tri > ast.dot`, then `dot -Tpng ast.dot -o ast.png` |
 | `--symtab` | the symbol table after semantic analysis |
 | `--tac` | Three Address Code (the default; `--ir` also works) |
 | `--opt` | optimized TAC (bonus) |
@@ -205,10 +210,28 @@ c-compiler/
 
 The full grammar (BNF, precedence table, dangling-else rule and lexical rules) is in [`docs/grammar.md`](docs/grammar.md).
 
+## Arrays and functions in the TAC (bonus)
+
+An array element is read with `t1 = a[i]` and written with `a[i] = t1`; the index counts
+elements. A function is a `func f:` ... `endfunc` block: each parameter is taken with
+`formal x`, and `return t1` leaves it. A call passes each argument with `param`, then calls:
+
+```text
+func square:            param 4
+formal x                t2 = call square 1
+t1 = x * x              print t2
+return t1
+endfunc
+```
+
+A `func` block is skipped when execution reaches it; its code only runs through a call.
+A call saves the called function's own variables, so recursion works with `--run` and in
+the `--asm` output.
+
 ## Tests
 
 ```sh
-make test                          # build, then run all 39 tests
+make test                          # build, then run all 46 tests
 sh tests/run_tests.sh --update     # rewrite the .expected files after an intended change
 ```
 
@@ -216,9 +239,9 @@ Each `tests/<category>/<name>.tri` is paired with `<name>.expected`. Its first l
 
 | Folder | Count | Programs |
 |---|---|---|
-| `valid/` | 19 | arithmetic, asm_printf, asm_small, c_printf, control, headers, manual_sample, manual_tac_example, nested_scopes, opt_constant_folding, run_c_crlf_includes, run_c_hello, run_c_printf, run_division_by_zero, run_manual_sample, run_scanf, run_scanf_bad_input, run_types_and_scopes, scanf_tac |
+| `valid/` | 23 | arithmetic, asm_function, asm_printf, asm_small, c_printf, control, dot_ast, headers, manual_sample, manual_tac_example, nested_scopes, opt_constant_folding, run_arrays_functions, run_c_crlf_includes, run_c_hello, run_c_printf, run_division_by_zero, run_loops_switch, run_manual_sample, run_scanf, run_scanf_bad_input, run_types_and_scopes, scanf_tac |
 | `lexical/` | 5 | c_bad_header, c_unterminated_string, invalid_character, invalid_identifier, unterminated_comment |
-| `syntax/` | 3 | missing_parenthesis, missing_semicolon, multiple_errors |
-| `semantic/` | 12 | c_main_errors, c_printf_errors, c_return_outside_main, invalid_assignment, invalid_expression, multiple_errors, non_bool_condition, redeclaration, scanf_errors, scope_violation, type_mismatch, undeclared |
+| `syntax/` | 4 | bad_for_loop, missing_parenthesis, missing_semicolon, multiple_errors |
+| `semantic/` | 14 | array_function_errors, c_main_errors, c_printf_errors, c_return_outside_main, invalid_assignment, invalid_expression, loop_switch_errors, multiple_errors, non_bool_condition, redeclaration, scanf_errors, scope_violation, type_mismatch, undeclared |
 
-Current result: **39 passed, 0 failed**.
+Current result: **46 passed, 0 failed**.

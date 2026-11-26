@@ -17,6 +17,7 @@
 #define NAME_LEN    128          /* longest variable or label name */
 #define MAX_STEPS   10000000L    /* the interpreter stops an endless loop */
 #define MAX_OUTPUT  (1 << 20)    /* and a program that prints more than 1 MB */
+#define MAX_CALLS   10000        /* and a recursion that goes this deep */
 
 /* ------------------------------------------------------------------ */
 /* Growing text buffer                                                  */
@@ -95,7 +96,16 @@ typedef enum {
     OP_AND, OP_OR,                              /* logical    */
     OP_NEG, OP_NOT,                             /* unary      */
     OP_LABEL, OP_GOTO, OP_IFFALSE, OP_IFTRUE, OP_PRINT, OP_READ,
-    OP_OUTS, OP_OUT, OP_OUTF                    /* printf pieces (C style) */
+    OP_OUTS, OP_OUT, OP_OUTF,                   /* printf pieces (C style) */
+    OP_LOAD,      /* result = a[b]     (arrays, bonus)                   */
+    OP_STORE,     /* result[a] = b                                       */
+    OP_READA,     /* read result[a]                                      */
+    OP_FUNC,      /* func label:       (functions, bonus)                */
+    OP_FORMAL,    /* formal result     the next argument of the call     */
+    OP_RETURN,    /* return a          (a may be absent)                 */
+    OP_ENDFUNC,   /* endfunc                                             */
+    OP_PARAM,     /* param a                                             */
+    OP_CALL       /* result = call label count   (result may be absent)  */
 } OpCode;
 
 /* Operator text for OP_ADD .. OP_NOT, indexed by OpCode. */
@@ -107,9 +117,9 @@ typedef struct {
     OpCode op;
     Operand result, a, b;
     TacType ty;            /* type the operation works in */
-    char label[NAME_LEN];  /* OP_LABEL / OP_GOTO / OP_IF* target */
+    char label[NAME_LEN];  /* OP_LABEL / OP_GOTO / OP_IF* target; OP_FUNC / OP_CALL function */
     char *str;             /* OP_OUTS: the text, C escapes kept (owned by the program) */
-    int precision;         /* OP_OUTF: digits after the decimal point */
+    int precision;         /* OP_OUTF: digits after the decimal point; OP_CALL: argument count */
 } Instr;
 
 /* Every variable and temporary: its name and type. A declared variable keeps
@@ -118,6 +128,9 @@ typedef struct {
     char name[NAME_LEN];
     TacType type;
     int declared;
+    int length;              /* array: number of elements (0 for a variable) */
+    int is_function;         /* the name of a function: type is its return type */
+    char owner[NAME_LEN];    /* function whose local this is ("" = global) */
 } Cell;
 
 struct TacProgram {
@@ -129,10 +142,15 @@ struct TacProgram {
 
 static int is_binary(OpCode op)  { return op >= OP_ADD && op <= OP_OR; }
 static int is_compare(OpCode op) { return op >= OP_LT && op <= OP_NE; }
-static int defines_result(OpCode op)
+/* Does the instruction store a value into the variable or temporary
+ * in->result? (a[i] = x and read a[i] store into an element instead.) */
+static int defines_result(const Instr *in)
 {
-    return op == OP_ASSIGN || op == OP_READ || op == OP_NEG || op == OP_NOT || is_binary(op);
+    OpCode op = in->op;
+    return op == OP_ASSIGN || op == OP_READ || op == OP_NEG || op == OP_NOT || is_binary(op)
+        || op == OP_LOAD || op == OP_FORMAL || (op == OP_CALL && in->result.kind == OPD_NAME);
 }
+static int is_jump(OpCode op) { return op == OP_GOTO || op == OP_IFFALSE || op == OP_IFTRUE; }
 static int is_const(const Operand *o)
 {
     return o->kind == OPD_INT || o->kind == OPD_FLOAT || o->kind == OPD_BOOL;
@@ -156,6 +174,9 @@ static int cell_add(TacProgram *p, const char *name, TacType type, int declared)
     snprintf(c->name, NAME_LEN, "%s", name);
     c->type = type;
     c->declared = declared;
+    c->length = 0;
+    c->is_function = 0;
+    c->owner[0] = '\0';
     return p->cell_count++;
 }
 
@@ -244,6 +265,18 @@ static void instr_text(const Instr *in, char *buf, size_t size)
     case OP_OUTS:    snprintf(buf, size, "outs \"%s\"", in->str); break;
     case OP_OUT:     snprintf(buf, size, "out %s", a); break;
     case OP_OUTF:    snprintf(buf, size, "outf %s %d", a, in->precision); break;
+    case OP_LOAD:    snprintf(buf, size, "%s = %s[%s]", r, a, b); break;
+    case OP_STORE:   snprintf(buf, size, "%s[%s] = %s", r, a, b); break;
+    case OP_READA:   snprintf(buf, size, "read %s[%s]", r, a); break;
+    case OP_FUNC:    snprintf(buf, size, "func %s:", in->label); break;
+    case OP_FORMAL:  snprintf(buf, size, "formal %s", r); break;
+    case OP_RETURN:  snprintf(buf, size, in->a.kind == OPD_NONE ? "return" : "return %s", a); break;
+    case OP_ENDFUNC: snprintf(buf, size, "endfunc"); break;
+    case OP_PARAM:   snprintf(buf, size, "param %s", a); break;
+    case OP_CALL:
+        if (in->result.kind == OPD_NAME) snprintf(buf, size, "%s = call %s %d", r, in->label, in->precision);
+        else                             snprintf(buf, size, "call %s %d", in->label, in->precision);
+        break;
     default:        snprintf(buf, size, "%s = %s %s %s", r, a, OP_SYMBOL[in->op], b); break;
     }
 }
@@ -269,6 +302,30 @@ static int parse_operand(const char *token, Operand *o)
         return 0;
     o->kind = OPD_NAME;
     snprintf(o->name, NAME_LEN, "%s", token);
+    return 1;
+}
+
+/* "a[i]" into the array name and the index operand. */
+static int parse_element(const char *token, Operand *array, Operand *index)
+{
+    const char *open = strchr(token, '[');
+    size_t len = strlen(token);
+    if (open == NULL || open == token || len < 4 || token[len - 1] != ']')
+        return 0;
+    char name[NAME_LEN], inside[NAME_LEN];
+    if ((size_t)(open - token) >= NAME_LEN || len - (size_t)(open - token) - 2 >= NAME_LEN)
+        return 0;
+    snprintf(name, sizeof name, "%.*s", (int)(open - token), token);
+    snprintf(inside, sizeof inside, "%.*s", (int)(len - (size_t)(open - token) - 2), open + 1);
+    return parse_operand(name, array) && array->kind == OPD_NAME && parse_operand(inside, index);
+}
+
+/* A function name for func / call (no brackets or other punctuation). */
+static int copy_function_name(const char *token, char *label)
+{
+    if (strlen(token) >= NAME_LEN || (!isalpha((unsigned char)token[0]) && token[0] != '_'))
+        return 0;
+    snprintf(label, NAME_LEN, "%s", token);
     return 1;
 }
 
@@ -329,9 +386,54 @@ static int parse_line(char *line, Instr *in)
         in->op = OP_PRINT;
         return parse_operand(tok[1], &in->a);
     }
+    if (n == 2 && strcmp(tok[0], "read") == 0 && strchr(tok[1], '[') != NULL) {
+        in->op = OP_READA;
+        return parse_element(tok[1], &in->result, &in->a);
+    }
     if (n == 2 && strcmp(tok[0], "read") == 0) {
         in->op = OP_READ;
         return parse_operand(tok[1], &in->result) && in->result.kind == OPD_NAME;
+    }
+    if (n == 2 && strcmp(tok[0], "func") == 0) {
+        size_t flen = strlen(tok[1]);
+        if (flen < 2 || tok[1][flen - 1] != ':')
+            return 0;
+        tok[1][flen - 1] = '\0';
+        in->op = OP_FUNC;
+        return copy_function_name(tok[1], in->label);
+    }
+    if (n == 1 && strcmp(tok[0], "endfunc") == 0) {
+        in->op = OP_ENDFUNC;
+        return 1;
+    }
+    if (n == 2 && strcmp(tok[0], "formal") == 0) {
+        in->op = OP_FORMAL;
+        return parse_operand(tok[1], &in->result) && in->result.kind == OPD_NAME;
+    }
+    if ((n == 1 || n == 2) && strcmp(tok[0], "return") == 0) {
+        in->op = OP_RETURN;
+        return n == 1 || parse_operand(tok[1], &in->a);
+    }
+    if (n == 2 && strcmp(tok[0], "param") == 0) {
+        in->op = OP_PARAM;
+        return parse_operand(tok[1], &in->a);
+    }
+    if ((n == 3 && strcmp(tok[0], "call") == 0) || (n == 5 && strcmp(tok[1], "=") == 0 && strcmp(tok[2], "call") == 0)) {
+        char *end;
+        in->op = OP_CALL;
+        if (n == 5 && !(parse_operand(tok[0], &in->result) && in->result.kind == OPD_NAME))
+            return 0;
+        in->precision = (int)strtol(tok[n - 1], &end, 10);
+        return *end == '\0' && in->precision >= 0 && copy_function_name(tok[n - 2], in->label);
+    }
+    if (n == 3 && strcmp(tok[1], "=") == 0 && strchr(tok[0], '[') != NULL) {
+        in->op = OP_STORE;
+        return parse_element(tok[0], &in->result, &in->a) && parse_operand(tok[2], &in->b);
+    }
+    if (n == 3 && strcmp(tok[1], "=") == 0 && strchr(tok[2], '[') != NULL) {
+        in->op = OP_LOAD;
+        return parse_operand(tok[0], &in->result) && in->result.kind == OPD_NAME
+            && parse_element(tok[2], &in->a, &in->b);
     }
     if (n == 2 && strcmp(tok[0], "out") == 0) {
         in->op = OP_OUT;
@@ -380,6 +482,7 @@ static TacType operand_type(TacProgram *p, Operand *o)
  * (a temporary is always defined before it is used). */
 static void resolve_types(TacProgram *p)
 {
+    const char *function = "";      /* the func ... endfunc block we are in */
     for (int i = 0; i < p->count; i++) {
         Instr *in = &p->code[i];
         TacType a = in->a.kind != OPD_NONE ? operand_type(p, &in->a) : TAC_INT;
@@ -396,19 +499,33 @@ static void resolve_types(TacProgram *p)
         } else if (in->op == OP_AND || in->op == OP_OR || in->op == OP_NOT) {
             in->ty = TAC_BOOL;
             value = TAC_BOOL;
+        } else if (in->op == OP_CALL) {
+            int f = cell_find(p, in->label);     /* the value has the function's return type */
+            value = in->ty = f >= 0 ? p->cells[f].type : TAC_INT;
         } else {
-            in->ty = a;       /* assign, negate, print, if */
+            in->ty = a;       /* assign, negate, print, if, a[i] (the element type) */
         }
 
-        if (defines_result(in->op)) {
+        if (in->op == OP_FUNC)                  /* temporaries defined from here on are its locals */
+            function = in->label;
+        else if (in->op == OP_ENDFUNC)
+            function = "";
+
+        if (in->op == OP_STORE || in->op == OP_READA) {   /* the array */
+            operand_type(p, &in->result);
+            in->ty = in->result.type;           /* the value converts to the element type */
+        }
+        if (defines_result(in)) {
             int k = cell_find(p, in->result.name);
-            if (k < 0)
+            if (k < 0) {
                 k = cell_add(p, in->result.name, value, 0);
-            else if (!p->cells[k].declared)
+                snprintf(p->cells[k].owner, NAME_LEN, "%s", function);
+            } else if (!p->cells[k].declared) {
                 p->cells[k].type = value;
+            }
             in->result.slot = k;
             in->result.type = p->cells[k].type;
-            if (in->op == OP_ASSIGN || in->op == OP_READ)
+            if (in->op == OP_ASSIGN || in->op == OP_READ || in->op == OP_FORMAL)
                 in->ty = in->result.type;   /* the copy converts to the variable's type */
         }
     }
@@ -420,8 +537,14 @@ TacProgram *tac_build(const char *text, const TacVar *vars, int var_count,
     TacProgram *p = (TacProgram *)xalloc(sizeof(TacProgram));
     memset(p, 0, sizeof *p);
     for (int k = 0; k < var_count; k++)
-        if (cell_find(p, vars[k].name) < 0)
-            cell_add(p, vars[k].name, vars[k].type, 1);
+        if (cell_find(p, vars[k].name) < 0) {
+            int slot = cell_add(p, vars[k].name, vars[k].type, 1);   /* may move p->cells */
+            Cell *c = &p->cells[slot];
+            c->length = vars[k].length > 0 ? vars[k].length : 0;
+            c->is_function = vars[k].is_function;
+            if (vars[k].function != NULL)
+                snprintf(c->owner, NAME_LEN, "%s", vars[k].function);
+        }
 
     const char *start = text;
     int line_number = 0;
@@ -549,7 +672,7 @@ static void fold_pass(TacProgram *p)
     int n = 0;
     for (int i = 0; i < p->count; i++) {
         Instr in = p->code[i];
-        if (in.op == OP_LABEL) {
+        if (in.op == OP_LABEL || in.op == OP_FUNC || in.op == OP_ENDFUNC) {
             memset(known, 0, (size_t)(cells ? cells : 1));
             p->code[n++] = in;
             continue;
@@ -566,7 +689,7 @@ static void fold_pass(TacProgram *p)
             }
             continue;             /* never taken: dropped */
         }
-        if (defines_result(in.op)) {
+        if (defines_result(&in)) {
             Operand folded;
             int b_const = in.b.kind == OPD_NONE || is_const(&in.b);
             if (in.op != OP_ASSIGN && is_const(&in.a) && b_const && fold(&in, &folded)) {
@@ -581,6 +704,8 @@ static void fold_pass(TacProgram *p)
                 known[in.result.slot] = 0;
             }
         }
+        if (in.op == OP_CALL)          /* the function may change any global variable */
+            memset(known, 0, (size_t)(cells ? cells : 1));
         p->code[n++] = in;
     }
     p->count = n;
@@ -588,18 +713,20 @@ static void fold_pass(TacProgram *p)
     free(known);
 }
 
-/* Pass 2: code after an unconditional jump is unreachable until the next label. */
+/* Pass 2: code after an unconditional jump (or a return) is unreachable
+ * until the next label (or the start or end of a function). */
 static void unreachable_pass(TacProgram *p)
 {
     int n = 0, dead = 0;
     for (int i = 0; i < p->count; i++) {
-        if (p->code[i].op == OP_LABEL) dead = 0;
+        if (p->code[i].op == OP_LABEL || p->code[i].op == OP_FUNC || p->code[i].op == OP_ENDFUNC)
+            dead = 0;
         if (dead) {
             free(p->code[i].str);
             continue;
         }
         p->code[n++] = p->code[i];
-        if (p->code[i].op == OP_GOTO) dead = 1;
+        if (p->code[i].op == OP_GOTO || p->code[i].op == OP_RETURN) dead = 1;
     }
     p->count = n;
 }
@@ -617,18 +744,22 @@ static void dead_temp_pass(TacProgram *p)
         const Instr *in = &p->code[i];
         if (in->a.kind == OPD_NAME) uses[in->a.slot]++;
         if (in->b.kind == OPD_NAME) uses[in->b.slot]++;
-        if (defines_result(in->op)) defs[in->result.slot]++;
+        if (defines_result(in)) defs[in->result.slot]++;
     }
     int n = 0;
     for (int i = 0; i < p->count; i++) {
         Instr in = p->code[i];
-        int temp = defines_result(in.op) && !p->cells[in.result.slot].declared;
-        if (temp && uses[in.result.slot] == 0)
+        int temp = defines_result(&in) && !p->cells[in.result.slot].declared;
+        if (temp && uses[in.result.slot] == 0 && in.op == OP_CALL) {
+            memset(&in.result, 0, sizeof in.result);     /* the call stays: it may print */
+            in.result.slot = -1;
+        } else if (temp && uses[in.result.slot] == 0) {
             continue;
+        }
         if (in.op == OP_ASSIGN && in.a.kind == OPD_NAME && !p->cells[in.a.slot].declared
             && uses[in.a.slot] == 1 && defs[in.a.slot] == 1 && n > 0) {
             Instr *prev = &p->code[n - 1];
-            if (defines_result(prev->op) && prev->result.slot == in.a.slot
+            if (defines_result(prev) && prev->result.slot == in.a.slot
                 && prev->result.type == in.result.type) {
                 prev->result = in.result;
                 continue;
@@ -775,19 +906,113 @@ static void read_value(TacType type, Value *r, const char **runtime_error)
     }
 }
 
+/* Index of the instruction `func name:`, or -1. */
+static int function_index(const TacProgram *p, const char *name)
+{
+    for (int i = 0; i < p->count; i++)
+        if (p->code[i].op == OP_FUNC && strcmp(p->code[i].label, name) == 0)
+            return i;
+    return -1;
+}
+
+/* One active call: where to go back to and the caller's copy of the
+ * callee's locals (restored on return, so recursion works). */
+typedef struct {
+    int return_pc;
+    int result_slot;      /* cell for the returned value, or -1 */
+    int function_cell;    /* cell of the function name: its return type */
+    int owner;            /* index of the function in the program's function list */
+    Value *saved;         /* saved values of the callee's locals, arrays included */
+    Value *args;          /* the arguments, taken by formal in order */
+    int arg_count, next_arg;
+} Frame;
+
+/* The locals of each function: the cells it owns. */
+typedef struct {
+    char name[NAME_LEN];
+    int *slots;
+    int slot_count;
+    int value_count;      /* scalars plus every array element */
+} FunctionLocals;
+
+static int function_find(const FunctionLocals *fl, int count, const char *name)
+{
+    for (int k = 0; k < count; k++)
+        if (strcmp(fl[k].name, name) == 0)
+            return k;
+    return -1;
+}
+
+/* Builds the list of functions with the cells each one owns. */
+static FunctionLocals *function_locals(const TacProgram *p, int *count)
+{
+    int n = 0;
+    for (int i = 0; i < p->count; i++)
+        if (p->code[i].op == OP_FUNC) n++;
+    FunctionLocals *fl = (FunctionLocals *)xalloc((size_t)(n ? n : 1) * sizeof(FunctionLocals));
+    n = 0;
+    for (int i = 0; i < p->count; i++) {
+        if (p->code[i].op != OP_FUNC)
+            continue;
+        FunctionLocals *f = &fl[n++];
+        snprintf(f->name, NAME_LEN, "%s", p->code[i].label);
+        f->slots = (int *)xalloc((size_t)(p->cell_count ? p->cell_count : 1) * sizeof(int));
+        f->slot_count = 0;
+        f->value_count = 0;
+        for (int k = 0; k < p->cell_count; k++)
+            if (!p->cells[k].is_function && strcmp(p->cells[k].owner, f->name) == 0) {
+                f->slots[f->slot_count++] = k;
+                f->value_count += p->cells[k].length > 0 ? p->cells[k].length : 1;
+            }
+    }
+    *count = n;
+    return fl;
+}
+
+static void function_locals_free(FunctionLocals *fl, int count)
+{
+    for (int k = 0; k < count; k++)
+        free(fl[k].slots);
+    free(fl);
+}
+
 char *tac_run(const TacProgram *p, const char **runtime_error)
 {
+    static char message[200];
     Text out = { NULL, 0, 0 };
     *runtime_error = NULL;
     int cells = p->cell_count ? p->cell_count : 1;
     Value *mem = (Value *)xalloc((size_t)cells * sizeof(Value));
+    Value **arrays = (Value **)xalloc((size_t)cells * sizeof(Value *));
     for (int k = 0; k < p->cell_count; k++) {     /* every variable starts at 0 */
         mem[k].ty = p->cells[k].type; mem[k].iv = 0; mem[k].fv = 0;
+        arrays[k] = NULL;
+        if (p->cells[k].length > 0) {
+            arrays[k] = (Value *)xalloc((size_t)p->cells[k].length * sizeof(Value));
+            for (int e = 0; e < p->cells[k].length; e++)
+                arrays[k][e] = mem[k];
+        }
     }
     int *target = (int *)xalloc((size_t)(p->count ? p->count : 1) * sizeof(int));
-    for (int i = 0; i < p->count; i++)
-        target[i] = p->code[i].op == OP_GOTO || p->code[i].op == OP_IFFALSE || p->code[i].op == OP_IFTRUE
-                  ? label_index(p, p->code[i].label) : -1;
+    for (int i = 0; i < p->count; i++) {
+        const Instr *in = &p->code[i];
+        target[i] = -1;
+        if (is_jump(in->op))
+            target[i] = label_index(p, in->label);
+        else if (in->op == OP_CALL)
+            target[i] = function_index(p, in->label);
+        else if (in->op == OP_FUNC) {             /* skipped when reached: jump past endfunc */
+            int j = i + 1;
+            while (j < p->count && p->code[j].op != OP_ENDFUNC) j++;
+            target[i] = j;
+        }
+    }
+    int function_count;
+    FunctionLocals *locals = function_locals(p, &function_count);
+    Frame *frames = (Frame *)xalloc(MAX_CALLS * sizeof(Frame));
+    int depth = 0;
+    Value *pending = NULL;              /* arguments passed with param, not yet called */
+    int pending_count = 0, pending_cap = 0;
 
     long steps = 0;
     for (int pc = 0; pc < p->count && *runtime_error == NULL; pc++) {
@@ -836,6 +1061,126 @@ char *tac_run(const TacProgram *p, const char **runtime_error)
         case OP_READ:
             read_value(p->cells[in->result.slot].type, &r, runtime_error);
             break;
+
+        /* ----- arrays ----- */
+        case OP_LOAD:
+        case OP_STORE:
+        case OP_READA: {
+            int array = in->op == OP_LOAD ? in->a.slot : in->result.slot;
+            Value index = in->op == OP_LOAD ? b : a;
+            const Cell *c = &p->cells[array];
+            if (arrays[array] == NULL || index.iv < 0 || index.iv >= c->length) {
+                snprintf(message, sizeof message, "Runtime error: index %ld is out of bounds for array '%s' of size %d",
+                         (long)index.iv, c->name, c->length);
+                *runtime_error = message;
+                break;
+            }
+            if (in->op == OP_LOAD) {
+                r = arrays[array][index.iv];
+                break;                    /* stored into the result below */
+            }
+            if (in->op == OP_READA) {
+                read_value(c->type, &r, runtime_error);
+                arrays[array][index.iv] = r;
+            } else {
+                arrays[array][index.iv] = convert_value(b, c->type);
+            }
+            continue;
+        }
+
+        /* ----- functions ----- */
+        case OP_FUNC:                     /* reached without a call: skip the function */
+            pc = target[pc];
+            continue;
+        case OP_PARAM:
+            if (pending_count == pending_cap) {
+                pending_cap = pending_cap ? pending_cap * 2 : 16;
+                pending = (Value *)xrealloc(pending, (size_t)pending_cap * sizeof(Value));
+            }
+            pending[pending_count++] = a;
+            continue;
+        case OP_CALL: {
+            int owner = function_find(locals, function_count, in->label);
+            if (target[pc] < 0 || owner < 0) {
+                snprintf(message, sizeof message, "Runtime error: call of an unknown function '%s'", in->label);
+                *runtime_error = message;
+                break;
+            }
+            if (depth == MAX_CALLS) {
+                *runtime_error = "Runtime error: too many nested calls (endless recursion?)";
+                break;
+            }
+            if (in->precision > pending_count) {
+                *runtime_error = "Runtime error: call with missing arguments";
+                break;
+            }
+            Frame *f = &frames[depth++];
+            const FunctionLocals *fl = &locals[owner];
+            f->return_pc = pc;
+            f->result_slot = in->result.kind == OPD_NAME ? in->result.slot : -1;
+            f->function_cell = cell_find(p, in->label);
+            f->owner = owner;
+            f->arg_count = in->precision;
+            f->next_arg = 0;
+            f->args = (Value *)xalloc((size_t)(f->arg_count ? f->arg_count : 1) * sizeof(Value));
+            memcpy(f->args, pending + pending_count - f->arg_count, (size_t)f->arg_count * sizeof(Value));
+            pending_count -= f->arg_count;
+            /* save the callee's locals, then start them at 0 */
+            f->saved = (Value *)xalloc((size_t)(fl->value_count ? fl->value_count : 1) * sizeof(Value));
+            int v = 0;
+            for (int k = 0; k < fl->slot_count; k++) {
+                int slot = fl->slots[k];
+                Value zero;
+                zero.ty = p->cells[slot].type; zero.iv = 0; zero.fv = 0;
+                if (arrays[slot] != NULL) {
+                    for (int e = 0; e < p->cells[slot].length; e++) {
+                        f->saved[v++] = arrays[slot][e];
+                        arrays[slot][e] = zero;
+                    }
+                } else {
+                    f->saved[v++] = mem[slot];
+                    mem[slot] = zero;
+                }
+            }
+            pc = target[pc];              /* continues after `func f:` */
+            continue;
+        }
+        case OP_FORMAL:
+            if (depth == 0 || frames[depth - 1].next_arg >= frames[depth - 1].arg_count) {
+                *runtime_error = "Runtime error: a function was called with too few arguments";
+                break;
+            }
+            r = frames[depth - 1].args[frames[depth - 1].next_arg++];
+            break;                        /* stored (converted) into the parameter below */
+        case OP_RETURN:
+        case OP_ENDFUNC: {
+            if (depth == 0) {
+                *runtime_error = "Runtime error: return outside of a function call";
+                break;
+            }
+            Frame *f = &frames[--depth];
+            const FunctionLocals *fl = &locals[f->owner];
+            TacType type = f->function_cell >= 0 ? p->cells[f->function_cell].type : TAC_INT;
+            Value result = convert_value(in->op == OP_RETURN && in->a.kind != OPD_NONE ? a : r, type);
+            int v = 0;
+            for (int k = 0; k < fl->slot_count; k++) {     /* the caller's locals come back */
+                int slot = fl->slots[k];
+                if (arrays[slot] != NULL)
+                    for (int e = 0; e < p->cells[slot].length; e++)
+                        arrays[slot][e] = f->saved[v++];
+                else
+                    mem[slot] = f->saved[v++];
+            }
+            free(f->saved);
+            free(f->args);
+            pc = f->return_pc;
+            if (f->result_slot >= 0) {
+                int slot = f->result_slot;
+                mem[slot] = p->cells[slot].declared ? convert_value(result, p->cells[slot].type) : result;
+            }
+            continue;
+        }
+
         case OP_ASSIGN:
             r = a;
             break;
@@ -900,6 +1245,17 @@ char *tac_run(const TacProgram *p, const char **runtime_error)
         int slot = in->result.slot;
         mem[slot] = p->cells[slot].declared ? convert_value(r, p->cells[slot].type) : r;
     }
+    while (depth > 0) {                   /* stopped inside a call */
+        depth--;
+        free(frames[depth].saved);
+        free(frames[depth].args);
+    }
+    for (int k = 0; k < p->cell_count; k++)
+        free(arrays[k]);
+    free(arrays);
+    free(frames);
+    free(pending);
+    function_locals_free(locals, function_count);
     free(mem);
     free(target);
     return text_take(&out);
@@ -920,6 +1276,10 @@ typedef struct {
     const char **strings; /* printf text pool .LS0, .LS1, ... (C escapes kept) */
     int string_count, string_cap;
     int uses_printf;      /* a printf piece was emitted: add its formats to .data */
+    const TacProgram *program;
+    int pc;               /* index of the instruction being translated */
+    const char *function; /* the function being translated ("" in main) */
+    int formal_index;     /* formal instructions seen in this function so far */
 } Asm;
 
 static int string_label(Asm *g, const char *text)
@@ -1146,6 +1506,166 @@ static void emit_read(Asm *g, const Instr *in, const char *res)
     }
 }
 
+/* ----- arrays and functions (bonus) ----- */
+
+/* %ecx = the element index of a[i]. */
+static void load_index(Asm *g, const Operand *index)
+{
+    char m[NAME_LEN + 8];
+    int_operand(index, m, sizeof m);
+    asm_ins(g, "movl", m, "%ecx");
+}
+
+/* The memory operand of element %ecx of an array: _v_a(,%ecx,4). */
+static void element_operand(const char *array, char *buf, size_t size)
+{
+    char m[NAME_LEN + 8];
+    cell_label(array, m, sizeof m);
+    snprintf(buf, size, "%s(,%%ecx,4)", m);
+}
+
+/* Type of parameter k of function name: the type of its k-th formal. */
+static TacType formal_type(const TacProgram *p, const char *name, int k)
+{
+    int inside = 0, seen = 0;
+    for (int i = 0; i < p->count; i++) {
+        const Instr *in = &p->code[i];
+        if (in->op == OP_FUNC) inside = strcmp(in->label, name) == 0;
+        else if (in->op == OP_ENDFUNC) inside = 0;
+        else if (inside && in->op == OP_FORMAL && seen++ == k) return in->result.type;
+    }
+    return TAC_INT;
+}
+
+static int formal_count(const TacProgram *p, const char *name)
+{
+    int inside = 0, count = 0;
+    for (int i = 0; i < p->count; i++) {
+        const Instr *in = &p->code[i];
+        if (in->op == OP_FUNC) inside = strcmp(in->label, name) == 0;
+        else if (in->op == OP_ENDFUNC) inside = 0;
+        else if (inside && in->op == OP_FORMAL) count++;
+    }
+    return count;
+}
+
+/* param x: pushes the argument, converted to the type of the parameter it
+ * belongs to (found from the call that follows the params). */
+static void emit_param(Asm *g, const Instr *in)
+{
+    const TacProgram *p = g->program;
+    int call = g->pc, before = 0;
+    while (call < p->count && p->code[call].op != OP_CALL) {
+        if (p->code[call].op == OP_PARAM) before++;
+        call++;
+    }
+    TacType type = in->a.type;
+    if (call < p->count) {
+        int k = p->code[call].precision - before;     /* this param's position */
+        if (k >= 0)
+            type = formal_type(p, p->code[call].label, k);
+    }
+    if (type == TAC_FLOAT && !(in->a.kind == OPD_NAME && in->a.type == TAC_FLOAT)) {
+        asm_ins(g, "subl", "$4", "%esp");
+        load_float(g, &in->a);
+        asm_ins(g, "fstps", "(%esp)", NULL);
+        return;
+    }
+    char a[NAME_LEN + 8];
+    int_operand(&in->a, a, sizeof a);       /* int, bool, or a float cell's bits */
+    asm_ins(g, "pushl", a, NULL);
+}
+
+/* return x: the value goes in %eax (a float as its bits), then to the end. */
+static void emit_return(Asm *g, const Instr *in)
+{
+    if (in->a.kind != OPD_NONE) {
+        int f = cell_find(g->program, g->function);
+        TacType type = f >= 0 ? g->program->cells[f].type : TAC_INT;
+        if (type == TAC_FLOAT && !(in->a.kind == OPD_NAME && in->a.type == TAC_FLOAT)) {
+            load_float(g, &in->a);
+            asm_ins(g, "subl", "$4", "%esp");
+            asm_ins(g, "fstps", "(%esp)", NULL);
+            asm_ins(g, "popl", "%eax", NULL);
+        } else {
+            char a[NAME_LEN + 8];
+            int_operand(&in->a, a, sizeof a);
+            asm_ins(g, "movl", a, "%eax");
+        }
+    }
+    char end[NAME_LEN + 16];
+    snprintf(end, sizeof end, ".Lret_%s", g->function);
+    asm_ins(g, "jmp", end, NULL);
+}
+
+/* func f: the callee saves its own locals (they may belong to a call of f
+ * that is still running: recursion) and restores them at the end. */
+static void emit_function_entry(Asm *g, const Instr *in)
+{
+    const TacProgram *p = g->program;
+    text_add(&g->text, "\n_f_%s:\n", in->label);
+    asm_ins(g, "pushl", "%ebp", NULL);
+    asm_ins(g, "movl", "%esp", "%ebp");
+    asm_ins(g, "pushl", "%esi", NULL);
+    asm_ins(g, "pushl", "%edi", NULL);
+    g->function = in->label;
+    g->formal_index = 0;
+    for (int k = 0; k < p->cell_count; k++) {
+        const Cell *c = &p->cells[k];
+        if (c->is_function || strcmp(c->owner, in->label) != 0)
+            continue;
+        char m[NAME_LEN + 8], n[32];
+        cell_label(c->name, m, sizeof m);
+        if (c->length == 0) {
+            asm_ins(g, "pushl", m, NULL);
+            continue;
+        }
+        snprintf(n, sizeof n, "$%d", 4 * c->length);   /* copy the array onto the stack */
+        asm_ins(g, "subl", n, "%esp");
+        snprintf(n, sizeof n, "$%d", c->length);
+        char addr[NAME_LEN + 8];
+        snprintf(addr, sizeof addr, "$%s", m);
+        asm_ins(g, "movl", addr, "%esi");
+        asm_ins(g, "movl", "%esp", "%edi");
+        asm_ins(g, "movl", n, "%ecx");
+        asm_ins(g, "cld", NULL, NULL);
+        asm_ins(g, "rep movsl", NULL, NULL);
+    }
+}
+
+/* endfunc: restores the saved locals in the opposite order and returns
+ * (%eax keeps the return value). */
+static void emit_function_exit(Asm *g)
+{
+    const TacProgram *p = g->program;
+    text_add(&g->text, ".Lret_%s:\n", g->function);
+    for (int k = p->cell_count - 1; k >= 0; k--) {
+        const Cell *c = &p->cells[k];
+        if (c->is_function || strcmp(c->owner, g->function) != 0)
+            continue;
+        char m[NAME_LEN + 8], n[32], addr[NAME_LEN + 8];
+        cell_label(c->name, m, sizeof m);
+        if (c->length == 0) {
+            asm_ins(g, "popl", m, NULL);
+            continue;
+        }
+        snprintf(addr, sizeof addr, "$%s", m);
+        asm_ins(g, "movl", "%esp", "%esi");
+        asm_ins(g, "movl", addr, "%edi");
+        snprintf(n, sizeof n, "$%d", c->length);
+        asm_ins(g, "movl", n, "%ecx");
+        asm_ins(g, "cld", NULL, NULL);
+        asm_ins(g, "rep movsl", NULL, NULL);
+        snprintf(n, sizeof n, "$%d", 4 * c->length);
+        asm_ins(g, "addl", n, "%esp");
+    }
+    asm_ins(g, "popl", "%edi", NULL);
+    asm_ins(g, "popl", "%esi", NULL);
+    asm_ins(g, "popl", "%ebp", NULL);
+    asm_ins(g, "ret", NULL, NULL);
+    g->function = "";
+}
+
 static void emit_instr(Asm *g, const Instr *in)
 {
     char line[3 * NAME_LEN + 32], res[NAME_LEN + 8], a[NAME_LEN + 8], jump[NAME_LEN + 2];
@@ -1157,7 +1677,7 @@ static void emit_instr(Asm *g, const Instr *in)
     instr_text(in, line, sizeof line);
     text_add(&g->text, "    # %s\n", line);
     snprintf(jump, sizeof jump, ".%s", in->label);
-    if (defines_result(in->op))
+    if (defines_result(in))
         cell_label(in->result.name, res, sizeof res);
 
     switch (in->op) {
@@ -1167,6 +1687,80 @@ static void emit_instr(Asm *g, const Instr *in)
     case OP_GOTO:
         asm_ins(g, "jmp", jump, NULL);
         return;
+    case OP_LOAD: {                   /* res = a[i]: the element's bits */
+        char m[NAME_LEN + 24];
+        load_index(g, &in->b);
+        element_operand(in->a.name, m, sizeof m);
+        asm_ins(g, "movl", m, "%eax");
+        asm_ins(g, "movl", "%eax", res);
+        return;
+    }
+    case OP_STORE: {                  /* a[i] = x, converted to the element type */
+        char m[NAME_LEN + 24];
+        load_index(g, &in->a);
+        element_operand(in->result.name, m, sizeof m);
+        if (in->result.type == TAC_FLOAT) {
+            load_float(g, &in->b);
+            asm_ins(g, "fstps", m, NULL);
+        } else {
+            int_operand(&in->b, a, sizeof a);
+            asm_ins(g, "movl", a, "%eax");
+            asm_ins(g, "movl", "%eax", m);
+        }
+        return;
+    }
+    case OP_READA: {                  /* scanf into &a[i] */
+        char m[NAME_LEN + 24];
+        g->uses_read = 1;
+        load_index(g, &in->a);
+        element_operand(in->result.name, m, sizeof m);
+        asm_ins(g, "leal", m, "%eax");
+        asm_ins(g, "pushl", "%eax", NULL);
+        asm_ins(g, "pushl", in->result.type == TAC_FLOAT ? "$.Lfmt_read_float" : "$.Lfmt_read_int", NULL);
+        asm_ins(g, "call", "_scanf", NULL);
+        asm_ins(g, "addl", "$8", "%esp");
+        if (in->result.type == TAC_BOOL) {
+            load_index(g, &in->a);
+            asm_ins(g, "movl", m, "%eax");
+            asm_ins(g, "cmpl", "$0", "%eax");
+            asm_ins(g, "setne", "%al", NULL);
+            asm_ins(g, "movzbl", "%al", "%eax");
+            asm_ins(g, "movl", "%eax", m);
+        }
+        return;
+    }
+    case OP_FUNC:
+        emit_function_entry(g, in);
+        return;
+    case OP_ENDFUNC:
+        emit_function_exit(g);
+        return;
+    case OP_FORMAL: {                 /* argument k of n is at 8 + 4*(n-1-k)(%ebp) */
+        char m[32];
+        int n = formal_count(g->program, g->function);
+        snprintf(m, sizeof m, "%d(%%ebp)", 8 + 4 * (n - 1 - g->formal_index++));
+        asm_ins(g, "movl", m, "%eax");
+        asm_ins(g, "movl", "%eax", res);
+        return;
+    }
+    case OP_RETURN:
+        emit_return(g, in);
+        return;
+    case OP_PARAM:
+        emit_param(g, in);
+        return;
+    case OP_CALL: {
+        char f[NAME_LEN + 8], n[32];
+        snprintf(f, sizeof f, "_f_%s", in->label);
+        asm_ins(g, "call", f, NULL);
+        if (in->precision > 0) {
+            snprintf(n, sizeof n, "$%d", 4 * in->precision);
+            asm_ins(g, "addl", n, "%esp");
+        }
+        if (in->result.kind == OPD_NAME)
+            asm_ins(g, "movl", "%eax", res);   /* the result has the function's type */
+        return;
+    }
     case OP_IFFALSE:
     case OP_IFTRUE:
         int_operand(&in->a, a, sizeof a);
@@ -1221,21 +1815,46 @@ static void emit_instr(Asm *g, const Instr *in)
     }
 }
 
-char *tac_assembly(const TacProgram *p, const char *title)
+char *tac_assembly(const TacProgram *p, const char *title, char *error, int error_size)
 {
     Asm g;
     memset(&g, 0, sizeof g);
+    g.program = p;
+    g.function = "";
+    for (int i = 0; i < p->count; i++)        /* every call must name a function of the program */
+        if (p->code[i].op == OP_CALL && function_index(p, p->code[i].label) < 0) {
+            if (error != NULL)
+                snprintf(error, (size_t)error_size, "cannot generate assembly: unknown function '%s'",
+                         p->code[i].label);
+            return NULL;
+        }
     text_add(&g.text, "_main:\n");
     asm_ins(&g, "pushl", "%ebp", NULL);
     asm_ins(&g, "movl", "%esp", "%ebp");
     asm_ins(&g, "andl", "$-16", "%esp");
     asm_ins(&g, "call", "___main", NULL);      /* MinGW runtime start-up */
-    for (int i = 0; i < p->count; i++)
-        emit_instr(&g, &p->code[i]);
+    /* main: everything outside the func ... endfunc blocks */
+    for (int i = 0, inside = 0; i < p->count; i++) {
+        if (p->code[i].op == OP_FUNC) inside = 1;
+        if (!inside) {
+            g.pc = i;
+            emit_instr(&g, &p->code[i]);
+        }
+        if (p->code[i].op == OP_ENDFUNC) inside = 0;
+    }
     asm_ins(&g, "xorl", "%eax", "%eax");
     asm_ins(&g, "movl", "%ebp", "%esp");
     asm_ins(&g, "popl", "%ebp", NULL);
     asm_ins(&g, "ret", NULL, NULL);
+    /* then each function, after main */
+    for (int i = 0, inside = 0; i < p->count; i++) {
+        if (p->code[i].op == OP_FUNC) inside = 1;
+        if (inside) {
+            g.pc = i;
+            emit_instr(&g, &p->code[i]);
+        }
+        if (p->code[i].op == OP_ENDFUNC) inside = 0;
+    }
 
     Text out = { NULL, 0, 0 };
     text_add(&out, "    # Generated by %s (x86, AT&T syntax, MinGW)\n", title);
@@ -1266,8 +1885,13 @@ char *tac_assembly(const TacProgram *p, const char *title)
     }
     for (int k = 0; k < p->cell_count; k++) {
         char name[NAME_LEN + 8];
+        if (p->cells[k].is_function)
+            continue;
         cell_label(p->cells[k].name, name, sizeof name);
-        text_add(&out, "%s:\n    %s\n", name, p->cells[k].type == TAC_FLOAT ? ".float 0.0" : ".long 0");
+        if (p->cells[k].length > 0)           /* an array: length 4-byte elements */
+            text_add(&out, "%s:\n    .fill %d, 4, 0\n", name, p->cells[k].length);
+        else
+            text_add(&out, "%s:\n    %s\n", name, p->cells[k].type == TAC_FLOAT ? ".float 0.0" : ".long 0");
     }
     text_add(&out, "    .text\n    .globl _main\n%s", text_take(&g.text));
     free(g.text.data);

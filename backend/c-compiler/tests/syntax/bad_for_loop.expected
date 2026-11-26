@@ -1,0 +1,4 @@
+exit 1
+line 4: syntax error: unexpected IDENT, expecting ';'
+line 8: syntax error: unexpected PRINT, expecting ';' on line 9 (missing ';' at the end of line 8?)
+Compilation failed: 0 lexical error(s), 2 syntax error(s).

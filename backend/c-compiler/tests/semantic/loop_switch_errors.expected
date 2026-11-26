@@ -1,0 +1,11 @@
+exit 1
+line 6: semantic error: 'break' outside of a loop or switch
+line 7: semantic error: 'continue' outside of a loop
+line 8: semantic error: type mismatch: switch value must be an int, got bool
+line 11: semantic error: duplicate case value 1 (already used at line 9)
+line 15: semantic error: multiple default labels in one switch (first at line 13)
+line 20: semantic error: 'continue' outside of a loop
+line 22: semantic error: 'case' label not directly inside a switch
+line 23: semantic error: type mismatch: for condition must be bool, got int
+line 26: semantic error: invalid expression: operator '++' needs a numeric variable, but 'flag' is a bool
+Compilation failed: 9 semantic error(s).

@@ -26,6 +26,12 @@ typedef struct Symbol {
     int scope_id;          /* unique number of the declaring scope (0 = global) */
     int depth;             /* nesting depth of that scope (0 = global)          */
     int line;              /* line where it was declared                        */
+    long length;           /* arrays (bonus): number of elements; 0 for a variable */
+    int is_function;       /* functions (bonus): the name of a function          */
+    ParamList *params;     /* functions: the parameters (types and names)        */
+    const char *function;  /* the function (other than main) whose local this is,
+                              or NULL; the back end saves a function's locals
+                              around a recursive call                           */
     struct Symbol *next_in_scope;   /* next symbol in the same scope            */
     struct Symbol *next_declared;   /* history list in declaration order        */
 } Symbol;

@@ -12,9 +12,18 @@
  *     x = y            x = - y         x = ! y         x = y op z
  *     L1:              goto L1         ifFalse x goto L1    if x goto L1
  *     print x          read x   (next word of the input into x)
+ * and the bonus forms for arrays and functions:
+ *     x = a[i]         a[i] = x        read a[i]
+ *     func f:          formal x        return x  /  return     endfunc
+ *     param x          x = call f 2    call f 2
  * TAC text carries no types, so tac_build gets the declared type of every
  * variable from the symbol table; the type of each temporary is worked out
  * from the instruction that defines it.
+ *
+ * Functions: a func ... endfunc block is skipped when execution reaches it.
+ * A call saves the callee's own variables, arrays and temporaries (its
+ * locals), so recursion works even though every name has one cell; they are
+ * restored when the call returns.
  *
  * Written in plain C that also compiles as C++, so the same file is used by
  * the C compiler (backend.c) and the Java compiler (backend.cpp).
@@ -24,10 +33,17 @@
 
 typedef enum { TAC_INT, TAC_FLOAT, TAC_BOOL } TacType;
 
-/* One declared variable: its TAC name (x, or x@3 for a shadowing one) and type. */
+/* One declared variable: its TAC name (x, or x@3 for a shadowing one) and type.
+ * An array has its number of elements in length; a function has is_function
+ * set and its return type in type (a void function: TAC_INT). function names
+ * the function whose local the variable is (NULL for a global or a variable
+ * of main). */
 typedef struct {
     const char *name;
     TacType type;
+    int length;
+    int is_function;
+    const char *function;
 } TacVar;
 
 typedef struct TacProgram TacProgram;
@@ -49,7 +65,8 @@ char *tac_text(const TacProgram *program);
 char *tac_run(const TacProgram *program, const char **runtime_error);
 
 /* 32-bit x86 assembly for MinGW gcc (caller frees). `title` names the
- * compiler in the first comment line. */
-char *tac_assembly(const TacProgram *program, const char *title);
+ * compiler in the first comment line. Returns NULL with a message in
+ * `error` for a program it cannot translate. */
+char *tac_assembly(const TacProgram *program, const char *title, char *error, int error_size);
 
 #endif

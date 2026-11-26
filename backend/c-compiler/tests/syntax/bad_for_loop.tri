@@ -1,0 +1,9 @@
+// Bonus loops: a for loop with a missing ';' between its parts, and a
+// do-while without the final ';'. Error recovery reports both.
+int i;
+for (i = 0; i < 3 i++)
+    print i;
+do {
+    i--;
+} while (i > 0)
+print i;

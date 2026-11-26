@@ -1,8 +1,8 @@
-// C style (bonus): a statement outside main(), main defined twice, and a function
-// other than main (functions are not supported).
+// C style (bonus): a statement outside main(), main defined twice, and a void
+// function that returns a value.
 #include <stdio.h>
 int x;
 x = 5;
 int main() { return 0; }
 int main() { return 0; }
-int helper() { return 0; }
+void helper(int a) { return a; }

@@ -119,3 +119,42 @@ printf("x = %d, half = %.1f\n", x, half);      outs "x = "
                                                outf half 1
                                                outs "\n"
 ```
+
+## Loops, arrays and functions (bonus, manual section 14)
+
+These productions extend the grammar above (`src/parser/parser.y`):
+
+```bnf
+<statement>      ::= ...
+                   | <type> IDENT "[" INT_LITERAL "]" ";"
+                   | <type> IDENT "[" INT_LITERAL "]" "=" <initializer> ";"
+                   | <type> IDENT "[" "]" "=" <initializer> ";"
+                   | <simple_stmt> ";"
+                   | "do" <statement> "while" "(" <expr> ")" ";"
+                   | "for" "(" <for_init> ";" <for_cond> ";" <for_update> ")" <statement>
+                   | "switch" "(" <expr> ")" "{" <statement_list> "}"
+                   | "case" <case_value> ":"  |  "default" ":"
+                   | "break" ";"  |  "continue" ";"
+                   | <type> IDENT "(" <parameters> ")" <block>
+                   | "void" IDENT "(" <parameters> ")" <block>
+                   | IDENT "(" <call_args> ")" ";"
+<simple_stmt>    ::= <lvalue> "=" <expr> | <lvalue> <compound_op> <expr>
+                   | <lvalue> "++" | <lvalue> "--" | "++" <lvalue> | "--" <lvalue>
+<compound_op>    ::= "+=" | "-=" | "*=" | "/=" | "%="
+<lvalue>         ::= IDENT | IDENT "[" <expr> "]"
+<for_init>       ::= ε | <type> IDENT "=" <expr> | <simple_stmt>
+<for_cond>       ::= ε | <expr>                      (empty: always true)
+<for_update>     ::= ε | <simple_stmt>
+<case_value>     ::= INT_LITERAL | "-" INT_LITERAL
+<initializer>    ::= "{" <arg_list> "}"
+<parameters>     ::= ε | "void" | <param_list>
+<param_list>     ::= <type> IDENT | <param_list> "," <type> IDENT
+<call_args>      ::= ε | <arg_list>
+<arg_list>       ::= <expr> | <arg_list> "," <expr>
+<primary>        ::= ... | IDENT "[" <expr> "]" | IDENT "(" <call_args> ")"
+<scanf_args>     ::= ... | <scanf_args> "," "&" IDENT "[" <expr> "]"
+```
+
+`case` and `default` are statements in the grammar; the semantic analyzer accepts them
+only directly inside a `switch`. A `do-while` missing its final `;` is reported once and
+parsing goes on. The grammar has no conflicts (`bison` reports none).

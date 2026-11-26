@@ -1,0 +1,7 @@
+// flags: --dot
+// Bonus: the AST as a Graphviz graph (dot -Tpng ast.dot -o ast.png).
+int x = 3;
+while (x > 0) {
+    x--;
+}
+print x;
